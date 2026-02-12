@@ -16,33 +16,6 @@ st.markdown("AI-Augmented Market & Audience Signal System")
 def load_data():
     df = pd.read_csv("youtube_master_clean.csv")
 
-    # Auto-detect sentiment column
-    sentiment_col = None
-    for col in df.columns:
-        if "sentiment" in col.lower():
-            sentiment_col = col
-            break
-
-    if sentiment_col:
-        df.rename(columns={sentiment_col: "sentiment_label"}, inplace=True)
-
-    # Auto-detect compound column
-    compound_col = None
-    for col in df.columns:
-        if "compound" in col.lower():
-            compound_col = col
-            break
-
-    if compound_col:
-        df.rename(columns={compound_col: "compound"}, inplace=True)
-
-    # Handle published_at safely
-    if "published_at" in df.columns:
-        df["published_at"] = pd.to_datetime(df["published_at"], errors="coerce")
-        df["date"] = df["published_at"].dt.date
-
-    return df
-
 df = load_data()
 
 # ============================
@@ -169,3 +142,4 @@ with tab4:
 
         fig5 = px.line(volume_trend, x="date", y="Volume")
         st.plotly_chart(fig5, use_container_width=True)
+
