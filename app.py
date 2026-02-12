@@ -107,59 +107,70 @@ with tab1:
         fig1 = px.line(trend_data, y=selected_title)
         st.plotly_chart(fig1, use_container_width=True)
 
-        st.subheader("Geographic Demand Heatmap – India")
+    # ==============================
+    # 🔥 FIXED GEOGRAPHIC MAP PART
+    # ==============================
 
     st.subheader("Geographic Opportunity – India")
 
-if not region_data.empty:
+    if not region_data.empty:
 
-    region_df = region_data.reset_index()
-    region_df.columns = ["State", "Interest"]
-    region_df = region_df[region_df["Interest"] > 0]
-    region_df["State"] = region_df["State"].str.strip()
+        region_df = region_data.reset_index()
+        region_df.columns = ["State", "Interest"]
+        region_df = region_df[region_df["Interest"] > 0]
+        region_df["State"] = region_df["State"].str.strip()
 
-    # Fix common naming mismatches
-    name_map = {
-        "Jammu & Kashmir": "Jammu and Kashmir",
-        "Andaman & Nicobar Islands": "Andaman and Nicobar Islands",
-        "Dadra & Nagar Haveli": "Dadra and Nagar Haveli",
-        "Daman & Diu": "Daman and Diu"
-    }
+        # If Google returns state codes
+        if region_df["State"].str.len().max() <= 3:
+            state_code_map = {
+                "MH": "Maharashtra",
+                "KA": "Karnataka",
+                "TN": "Tamil Nadu",
+                "DL": "Delhi",
+                "UP": "Uttar Pradesh",
+                "WB": "West Bengal",
+                "RJ": "Rajasthan",
+                "GJ": "Gujarat",
+                "HR": "Haryana",
+                "PB": "Punjab",
+                "MP": "Madhya Pradesh",
+                "AP": "Andhra Pradesh",
+                "TS": "Telangana",
+                "KL": "Kerala",
+                "BR": "Bihar",
+                "OR": "Odisha",
+                "AS": "Assam"
+            }
+            region_df["State"] = region_df["State"].replace(state_code_map)
 
-    region_df["State"] = region_df["State"].replace(name_map)
+        fig2 = px.choropleth(
+            region_df,
+            locations="State",
+            locationmode="country names",
+            color="Interest",
+            color_continuous_scale="Blues",
+            scope="asia"
+        )
 
-    fig = px.choropleth(
-        region_df,
-        locations="State",
-        locationmode="country names",
-        color="Interest",
-        color_continuous_scale="Reds",
-        scope="asia",
-        hover_name="State"
-    )
+        fig2.update_geos(
+            visible=True,
+            showcountries=True,
+            showcoastlines=False,
+            showland=True,
+            fitbounds="locations",
+            lataxis_range=[6, 38],
+            lonaxis_range=[68, 98]
+        )
 
-    fig.update_geos(
-        fitbounds="locations",
-        showcountries=True,
-        showcoastlines=False,
-        showland=True,
-        projection_type="mercator"
-    )
+        st.plotly_chart(fig2, use_container_width=True)
 
-    fig.update_layout(
-        height=650,
-        margin={"r":0,"t":30,"l":0,"b":0}
-    )
+        # Executive insight
+        top_states = region_df.sort_values("Interest", ascending=False).head(5)
+        st.markdown("### Top 5 High-Demand States")
+        st.dataframe(top_states)
 
-    st.plotly_chart(fig, use_container_width=True)
-
-    st.markdown("### Top 5 High-Demand States")
-    st.dataframe(region_df.sort_values("Interest", ascending=False).head(5))
-
-else:
-    st.warning("Google Trends returned no regional data.")
-
-
+    else:
+        st.warning("Google Trends returned no regional data.")
 
 # =====================================================
 # TAB 2 – AUDIENCE INTELLIGENCE
@@ -244,6 +255,3 @@ with tab4:
         st.plotly_chart(fig5, use_container_width=True)
     else:
         st.info("No timestamp column available for velocity analysis.")
-
-
-
