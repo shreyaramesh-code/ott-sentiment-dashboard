@@ -3,15 +3,15 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 import numpy as np
+from pytrends.request import TrendReq
 
-st.set_page_config(page_title="Content Intelligence Engine", layout="wide")
+st.set_page_config(layout="wide")
+st.title("Pre-Release OTT Content Intelligence Platform")
+st.markdown("AI-Augmented Market & Audience Signal System")
 
-st.title("Content Acquisition Intelligence Engine")
-st.markdown("Pre-Release OTT Investment Signal Dashboard – Indian Market")
-
-# -------------------------------------------------
-# LOAD DATA
-# -------------------------------------------------
+# ============================
+# LOAD YOUTUBE DATA
+# ============================
 @st.cache_data
 def load_data():
     df = pd.read_csv("youtube_sentiment.csv")
@@ -21,163 +21,150 @@ def load_data():
 
 df = load_data()
 
-# -------------------------------------------------
-# VIDEO FILTER
-# -------------------------------------------------
-video_ids = df["video_id"].unique().tolist()
+# ============================
+# GOOGLE TRENDS REAL-TIME
+# ============================
 
-selected_video = st.sidebar.selectbox("Select Content (Video ID)", ["All"] + video_ids)
+st.sidebar.header("Market Intelligence")
 
-filtered_df = df.copy()
-if selected_video != "All":
-    filtered_df = filtered_df[filtered_df["video_id"] == selected_video]
+selected_title = st.sidebar.selectbox(
+    "Select Title for Market Analysis",
+    [
+        "Squid Game",
+        "Squid Game 2",
+        "Can This Love Be Translated"
+    ]
+)
 
-# -------------------------------------------------
-# CALCULATE INDICES
-# -------------------------------------------------
+pytrends = TrendReq(hl='en-IN', tz=330)
 
-# Sentiment Strength Index
-ssi = filtered_df["compound"].mean()
-ssi_scaled = (ssi + 1) / 2 * 100  # normalize from -1,1 → 0,100
+@st.cache_data(ttl=3600)
+def get_trends(keyword):
+    pytrends.build_payload([keyword], timeframe='today 3-m', geo='IN')
+    interest_over_time = pytrends.interest_over_time()
+    region_interest = pytrends.interest_by_region(resolution='REGION', inc_low_vol=True)
+    return interest_over_time, region_interest
 
-# Polarization Risk Index
-negative_ratio = (filtered_df["sentiment_label"] == "negative").mean()
-sentiment_variance = filtered_df["compound"].var()
-pri = (negative_ratio * 100) + (sentiment_variance * 50)
+trend_data, region_data = get_trends(selected_title)
 
-# Engagement Velocity Index
-daily_counts = filtered_df.groupby("date").size().reset_index(name="volume")
-if len(daily_counts) > 5:
-    first_half = daily_counts["volume"].iloc[:len(daily_counts)//2].mean()
-    second_half = daily_counts["volume"].iloc[len(daily_counts)//2:].mean()
-    evi = ((second_half - first_half) / (first_half + 1)) * 100
-else:
-    evi = 0
-
-# Emotional Excitement Index
-if "joy" in filtered_df.columns:
-    eei = (filtered_df["joy"].mean() + filtered_df["anticipation"].mean()) * 50
-else:
-    eei = 0
-
-# Investment Confidence Score
-ics = (0.30 * ssi_scaled/100 +
-       0.25 * eei/100 +
-       0.25 * (evi/100) -
-       0.20 * (pri/100))
-
-ics_score = round(max(min(ics * 10, 10), 0), 2)
-
-# -------------------------------------------------
+# ============================
 # TABS
-# -------------------------------------------------
+# ============================
+
 tab1, tab2, tab3, tab4 = st.tabs([
-    "Acquisition Overview",
-    "Content Diagnostics",
-    "Momentum & Growth",
-    "Investment Model"
+    "Market Signals",
+    "Audience Intelligence",
+    "Investment Radar",
+    "Benchmark & Velocity"
 ])
 
-# -------------------------------------------------
-# TAB 1 — OVERVIEW
-# -------------------------------------------------
+# ======================================================
+# TAB 1 – MARKET SIGNALS (Google Trends)
+# ======================================================
+
 with tab1:
 
-    col1, col2, col3, col4 = st.columns(4)
-    col1.metric("Sentiment Strength Index", round(ssi_scaled,2))
-    col2.metric("Polarization Risk Index", round(pri,2))
-    col3.metric("Engagement Velocity Index", round(evi,2))
-    col4.metric("Emotional Excitement Index", round(eei,2))
+    st.subheader("Interest Over Time – India")
 
-    st.divider()
+    if not trend_data.empty:
+        fig1 = px.line(trend_data, y=selected_title,
+                       title="Google Search Interest Trend")
+        st.plotly_chart(fig1, use_container_width=True)
 
-    st.metric("Investment Confidence Score (0–10)", ics_score)
+    st.subheader("Geographic Opportunity Map")
 
-    if ics_score >= 7:
-        st.success("Strategic Acquisition Opportunity – Strong Pre-Release Signal")
-    elif ics_score >= 5:
-        st.warning("Moderate Potential – Conditional Investment Recommended")
-    else:
-        st.error("High Risk – Acquisition Caution Advised")
+    if not region_data.empty:
+        region_df = region_data.reset_index()
+        region_df.columns = ["State", "Interest"]
 
-# -------------------------------------------------
-# TAB 2 — CONTENT DIAGNOSTICS
-# -------------------------------------------------
-with tab2:
+        fig2 = px.choropleth(
+            region_df,
+            locations="State",
+            locationmode="country names",
+            color="Interest",
+            color_continuous_scale="Blues",
+            title="Search Interest by Region (India)"
+        )
 
-    st.subheader("Sentiment Distribution")
-
-    sentiment_counts = filtered_df["sentiment_label"].value_counts().reset_index()
-    sentiment_counts.columns = ["Sentiment", "Count"]
-
-    fig1 = px.bar(sentiment_counts,
-                  x="Sentiment",
-                  y="Count",
-                  color="Sentiment")
-    st.plotly_chart(fig1, use_container_width=True)
-
-    if "joy" in filtered_df.columns:
-        st.subheader("Emotion Contribution Heatmap")
-
-        emotion_cols = ["joy","trust","anticipation","sadness"]
-        emotion_means = filtered_df[emotion_cols].mean()
-
-        fig2 = go.Figure(data=go.Heatmap(
-            z=[emotion_means.values],
-            x=emotion_cols,
-            y=["Intensity"],
-            colorscale="Blues"
-        ))
         st.plotly_chart(fig2, use_container_width=True)
 
-    st.subheader("Compound Sentiment Distribution")
+# ======================================================
+# TAB 2 – AUDIENCE INTELLIGENCE
+# ======================================================
 
-    fig3 = px.histogram(filtered_df,
-                        x="compound",
-                        nbins=30)
-    st.plotly_chart(fig3, use_container_width=True)
+with tab2:
 
-# -------------------------------------------------
-# TAB 3 — MOMENTUM
-# -------------------------------------------------
+    positive_ratio = (df["sentiment_label"] == "positive").mean()
+    negative_ratio = (df["sentiment_label"] == "negative").mean()
+
+    col1, col2, col3 = st.columns(3)
+    col1.metric("Positive Ratio", f"{round(positive_ratio*100,2)}%")
+    col2.metric("Negative Risk", f"{round(negative_ratio*100,2)}%")
+    col3.metric("Net Sentiment", round(df["compound"].mean(),3))
+
+    if "joy" in df.columns:
+        emotion_cols = ["joy","trust","anticipation","sadness"]
+        emotion_means = df[emotion_cols].mean()
+
+        fig3 = go.Figure(data=go.Bar(
+            x=emotion_cols,
+            y=emotion_means
+        ))
+        fig3.update_layout(title="Emotional Drivers")
+        st.plotly_chart(fig3, use_container_width=True)
+
+# ======================================================
+# TAB 3 – INVESTMENT RADAR
+# ======================================================
+
 with tab3:
 
-    if "date" in filtered_df.columns:
-        daily_sentiment = filtered_df.groupby("date")["compound"].mean().reset_index()
+    ssi = (df["compound"].mean()+1)/2
+    eei = (df["joy"].mean()+df["anticipation"].mean())/2
+    risk = negative_ratio
+    velocity = df.groupby("date").size().pct_change().mean()
 
-        fig4 = px.line(daily_sentiment,
-                       x="date",
-                       y="compound",
-                       title="Sentiment Momentum")
-        st.plotly_chart(fig4, use_container_width=True)
+    categories = ['Sentiment Strength','Excitement','Momentum','Low Risk']
+    values = [
+        ssi,
+        eei,
+        velocity if not np.isnan(velocity) else 0,
+        1-risk
+    ]
 
-        volume_trend = filtered_df.groupby("date").size().reset_index(name="Volume")
-        fig5 = px.line(volume_trend,
-                       x="date",
-                       y="Volume",
-                       title="Audience Signal Volume Growth")
-        st.plotly_chart(fig5, use_container_width=True)
+    fig4 = go.Figure()
+    fig4.add_trace(go.Scatterpolar(
+        r=values,
+        theta=categories,
+        fill='toself'
+    ))
 
-# -------------------------------------------------
-# TAB 4 — INVESTMENT SIMULATION
-# -------------------------------------------------
+    fig4.update_layout(
+        polar=dict(radialaxis=dict(visible=True, range=[0,1])),
+        showlegend=False,
+        title="Composite Investment Radar"
+    )
+
+    st.plotly_chart(fig4, use_container_width=True)
+
+# ======================================================
+# TAB 4 – BENCHMARK & VIRAL VELOCITY
+# ======================================================
+
 with tab4:
 
-    st.subheader("Scenario Sensitivity Model")
+    st.subheader("Audience Signal Growth")
 
-    marketing_push = st.slider("Marketing Amplification Factor", 0.5, 2.0, 1.0)
+    volume_trend = df.groupby("date").size().reset_index(name="Volume")
 
-    adjusted_evi = evi * marketing_push
+    fig5 = px.line(volume_trend,
+                   x="date",
+                   y="Volume",
+                   title="Comment Velocity")
 
-    adjusted_ics = (0.30 * ssi_scaled/100 +
-                    0.25 * eei/100 +
-                    0.25 * (adjusted_evi/100) -
-                    0.20 * (pri/100))
+    st.plotly_chart(fig5, use_container_width=True)
 
-    adjusted_score = round(max(min(adjusted_ics * 10, 10), 0), 2)
-
-    st.metric("Adjusted Investment Confidence Score", adjusted_score)
-
-    st.markdown("""
-    This simulation estimates how promotional amplification impacts acquisition confidence.
-    """)
+    if velocity and velocity > 0:
+        st.success("Viral Acceleration Detected")
+    else:
+        st.warning("No Significant Viral Acceleration")
