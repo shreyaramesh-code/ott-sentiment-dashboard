@@ -3,6 +3,7 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 import numpy as np
+import requests
 from pytrends.request import TrendReq
 
 st.set_page_config(layout="wide")
@@ -21,31 +22,13 @@ def load_data():
 df = load_data()
 
 # =====================================================
-# AUTO DETECT CRITICAL COLUMNS (NO ASSUMPTIONS)
+# AUTO DETECT CRITICAL COLUMNS
 # =====================================================
 
-# Detect sentiment column
-sentiment_col = None
-for col in df.columns:
-    if "sentiment" in col.lower():
-        sentiment_col = col
-        break
+sentiment_col = next((col for col in df.columns if "sentiment" in col.lower()), None)
+compound_col = next((col for col in df.columns if "compound" in col.lower()), None)
+date_col = next((col for col in df.columns if "publish" in col.lower()), None)
 
-# Detect compound column
-compound_col = None
-for col in df.columns:
-    if "compound" in col.lower():
-        compound_col = col
-        break
-
-# Detect published_at
-date_col = None
-for col in df.columns:
-    if "publish" in col.lower():
-        date_col = col
-        break
-
-# Stop safely if essential columns missing
 if sentiment_col is None:
     st.error("No sentiment column detected in dataset.")
     st.stop()
@@ -54,13 +37,12 @@ if compound_col is None:
     st.error("No compound score column detected.")
     st.stop()
 
-# Convert date if available
 if date_col:
     df[date_col] = pd.to_datetime(df[date_col], errors="coerce")
     df["date"] = df[date_col].dt.date
 
 # =====================================================
-# GOOGLE TRENDS REAL-TIME
+# SIDEBAR
 # =====================================================
 
 st.sidebar.header("Market Intelligence")
@@ -76,13 +58,33 @@ selected_title = st.sidebar.selectbox(
 
 pytrends = TrendReq(hl='en-IN', tz=330)
 
+# =====================================================
+# GOOGLE TRENDS DATA
+# =====================================================
+
 @st.cache_data(ttl=3600)
 def get_trends(keyword):
     pytrends.build_payload([keyword], timeframe='today 3-m', geo='IN')
-    interest_over_time = pytrends.interest_over_time()
-    return interest_over_time
+    return pytrends.interest_over_time()
+
+@st.cache_data(ttl=3600)
+def get_region_interest(keyword):
+    pytrends.build_payload([keyword], timeframe='today 3-m', geo='IN')
+    return pytrends.interest_by_region(resolution='REGION', inc_low_vol=True)
 
 trend_data = get_trends(selected_title)
+region_data = get_region_interest(selected_title)
+
+# =====================================================
+# LOAD GEOJSON PROPERLY
+# =====================================================
+
+@st.cache_data
+def load_geojson():
+    url = "https://raw.githubusercontent.com/codeforgermany/click_that_hood/main/public/data/india-states.geojson"
+    return requests.get(url).json()
+
+india_geojson = load_geojson()
 
 # =====================================================
 # TABS
@@ -99,7 +101,6 @@ tab1, tab2, tab3, tab4 = st.tabs([
 # TAB 1 – MARKET SIGNALS
 # =====================================================
 
-
 with tab1:
 
     st.subheader("Interest Over Time – India")
@@ -107,45 +108,68 @@ with tab1:
     if not trend_data.empty:
         fig1 = px.line(trend_data, y=selected_title)
         st.plotly_chart(fig1, use_container_width=True)
+    else:
+        st.warning("No trend data available.")
 
-   # -------- REGION DATA --------
-@st.cache_data(ttl=3600)
-def get_region_interest(keyword):
-    pytrends.build_payload([keyword], timeframe='today 3-m', geo='IN')
-    region_interest = pytrends.interest_by_region(
-        resolution='REGION',
-        inc_low_vol=True
-    )
-    return region_interest
+    st.subheader("Geographic Opportunity – India")
 
-region_data = get_region_interest(selected_title)
+    if not region_data.empty:
 
-st.subheader("Geographic Opportunity – India")
+        region_df = region_data.reset_index()
+        region_df.columns = ["State", "Interest"]
 
-if not region_data.empty:
+        region_df = region_df[region_df["Interest"] > 0]
+        region_df["State"] = region_df["State"].str.strip()
 
-    region_df = region_data.reset_index()
-    region_df.columns = ["State", "Interest"]
+        # Fix common Google Trends naming mismatches
+        name_map = {
+            "Delhi": "NCT of Delhi",
+            "Jammu & Kashmir": "Jammu and Kashmir",
+            "Andaman & Nicobar Islands": "Andaman and Nicobar Islands",
+            "Dadra & Nagar Haveli": "Dadra and Nagar Haveli",
+            "Daman & Diu": "Daman and Diu"
+        }
 
-    # Remove zero interest states (cleaner visualization)
-    region_df = region_df[region_df["Interest"] > 0]
+        region_df["State"] = region_df["State"].replace(name_map)
 
-    fig2 = px.choropleth(
-        region_df,
-        locations="State",
-        geojson="https://raw.githubusercontent.com/codeforgermany/click_that_hood/main/public/data/india-states.geojson",
-        featureidkey="properties.name",
-        color="Interest",
-        color_continuous_scale="Blues",
-    )
+        # If Google Trends returns state codes instead of names
+        if region_df["State"].str.len().max() <= 3:
+            state_code_map = {
+                "MH": "Maharashtra",
+                "KA": "Karnataka",
+                "TN": "Tamil Nadu",
+                "DL": "NCT of Delhi",
+                "UP": "Uttar Pradesh",
+                "WB": "West Bengal",
+                "RJ": "Rajasthan",
+                "GJ": "Gujarat",
+                "HR": "Haryana"
+            }
+            region_df["State"] = region_df["State"].replace(state_code_map)
 
-    fig2.update_geos(fitbounds="locations", visible=False)
+        fig2 = px.choropleth(
+            region_df,
+            geojson=india_geojson,
+            locations="State",
+            featureidkey="properties.name",
+            color="Interest",
+            color_continuous_scale="Blues"
+        )
 
-    st.plotly_chart(fig2, use_container_width=True)
+        fig2.update_geos(
+            fitbounds="locations",
+            visible=False
+        )
 
-else:
-    st.warning("Google Trends returned no regional data.")
+        st.plotly_chart(fig2, use_container_width=True)
 
+        # Add actionable insights
+        top_states = region_df.sort_values("Interest", ascending=False).head(5)
+        st.markdown("### Top 5 High-Demand States")
+        st.dataframe(top_states)
+
+    else:
+        st.warning("Google Trends returned no regional data.")
 
 # =====================================================
 # TAB 2 – AUDIENCE INTELLIGENCE
@@ -162,11 +186,10 @@ with tab2:
     col2.metric("Negative Risk", f"{round(negative_ratio*100,2)}%")
     col3.metric("Net Sentiment Score", round(net_sentiment,3))
 
-    # Emotion safely if exists
     emotion_cols = ["joy","trust","anticipation","sadness"]
     available_emotions = [col for col in emotion_cols if col in df.columns]
 
-    if len(available_emotions) > 0:
+    if available_emotions:
         emotion_means = df[available_emotions].mean()
         fig3 = go.Figure(data=go.Bar(
             x=emotion_means.index,
@@ -184,16 +207,13 @@ with tab3:
     positive_ratio = (df[sentiment_col].str.lower() == "positive").mean()
     negative_ratio = (df[sentiment_col].str.lower() == "negative").mean()
 
-    # Sentiment Strength Index
     ssi = (df[compound_col].mean() + 1) / 2
 
-    # Emotional Excitement (fallback if not available)
     if "joy" in df.columns and "anticipation" in df.columns:
         eei = (df["joy"].mean() + df["anticipation"].mean()) / 2
     else:
         eei = ssi
 
-    # Velocity
     if "date" in df.columns:
         velocity = df.groupby("date").size().pct_change().mean()
         velocity = 0 if pd.isna(velocity) else velocity
@@ -230,12 +250,7 @@ with tab4:
 
     if "date" in df.columns:
         volume_trend = df.groupby("date").size().reset_index(name="Volume")
-
         fig5 = px.line(volume_trend, x="date", y="Volume")
         st.plotly_chart(fig5, use_container_width=True)
     else:
         st.info("No timestamp column available for velocity analysis.")
-
-
-
-
