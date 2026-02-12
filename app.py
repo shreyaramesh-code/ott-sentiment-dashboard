@@ -109,65 +109,81 @@ with tab1:
 
         st.subheader("Geographic Demand Heatmap – India")
 
-    if not region_data.empty:
+    st.subheader("Geographic Opportunity – India")
 
-        region_df = region_data.reset_index()
-        region_df.columns = ["State", "Interest"]
-        region_df = region_df[region_df["Interest"] > 0]
-        region_df["State"] = region_df["State"].str.strip()
+if not region_data.empty:
 
-        # Handle state code case
-        if region_df["State"].str.len().max() <= 3:
+    region_df = region_data.reset_index()
+    region_df.columns = ["State", "Interest"]
+    region_df = region_df[region_df["Interest"] > 0]
+    region_df["State"] = region_df["State"].str.strip()
 
-            state_code_map = {
-                "MH": "Maharashtra",
-                "KA": "Karnataka",
-                "TN": "Tamil Nadu",
-                "DL": "Delhi",
-                "UP": "Uttar Pradesh",
-                "WB": "West Bengal",
-                "RJ": "Rajasthan",
-                "GJ": "Gujarat",
-                "HR": "Haryana",
-                "PB": "Punjab",
-                "MP": "Madhya Pradesh",
-                "AP": "Andhra Pradesh",
-                "TS": "Telangana",
-                "KL": "Kerala",
-                "BR": "Bihar",
-                "OR": "Odisha",
-                "AS": "Assam"
-            }
+    # Map state names to ISO codes
+    state_iso_map = {
+        "Andhra Pradesh": "IN-AP",
+        "Arunachal Pradesh": "IN-AR",
+        "Assam": "IN-AS",
+        "Bihar": "IN-BR",
+        "Chhattisgarh": "IN-CT",
+        "Delhi": "IN-DL",
+        "Goa": "IN-GA",
+        "Gujarat": "IN-GJ",
+        "Haryana": "IN-HR",
+        "Himachal Pradesh": "IN-HP",
+        "Jharkhand": "IN-JH",
+        "Karnataka": "IN-KA",
+        "Kerala": "IN-KL",
+        "Madhya Pradesh": "IN-MP",
+        "Maharashtra": "IN-MH",
+        "Manipur": "IN-MN",
+        "Meghalaya": "IN-ML",
+        "Mizoram": "IN-MZ",
+        "Nagaland": "IN-NL",
+        "Odisha": "IN-OR",
+        "Punjab": "IN-PB",
+        "Rajasthan": "IN-RJ",
+        "Sikkim": "IN-SK",
+        "Tamil Nadu": "IN-TN",
+        "Telangana": "IN-TS",
+        "Tripura": "IN-TR",
+        "Uttar Pradesh": "IN-UP",
+        "Uttarakhand": "IN-UT",
+        "West Bengal": "IN-WB"
+    }
 
-            region_df["State"] = region_df["State"].replace(state_code_map)
+    region_df["ISO"] = region_df["State"].map(state_iso_map)
 
-        # Sort by interest
-        region_df = region_df.sort_values("Interest", ascending=False)
+    # Drop unmatched rows
+    region_df = region_df.dropna(subset=["ISO"])
 
-        # Create Heatmap
-        heatmap_fig = px.imshow(
-            region_df[["Interest"]],
-            labels=dict(color="Search Interest"),
-            x=["Interest Score"],
-            y=region_df["State"],
-            color_continuous_scale="Reds",
-            aspect="auto"
-        )
+    fig = go.Figure(go.Choropleth(
+        locations=region_df["ISO"],
+        z=region_df["Interest"],
+        locationmode="ISO-3166-2",
+        colorscale="Reds",
+        colorbar_title="Search Interest"
+    ))
 
-        heatmap_fig.update_layout(
-            height=600,
-            xaxis_title="",
-            yaxis_title="State"
-        )
+    fig.update_geos(
+        scope="asia",
+        fitbounds="locations",
+        showcountries=False,
+        showcoastlines=False,
+        showland=True
+    )
 
-        st.plotly_chart(heatmap_fig, use_container_width=True)
+    fig.update_layout(
+        height=650,
+        margin={"r":0,"t":30,"l":0,"b":0}
+    )
 
-        # Add executive insight
-        st.markdown("### Top 5 High-Demand States")
-        st.dataframe(region_df.head(5))
+    st.plotly_chart(fig, use_container_width=True)
 
-    else:
-        st.warning("Google Trends returned no regional data.")
+    st.markdown("### Top 5 High-Demand States")
+    st.dataframe(region_df.sort_values("Interest", ascending=False).head(5))
+
+else:
+    st.warning("Google Trends returned no regional data.")
 
 
 # =====================================================
@@ -253,4 +269,5 @@ with tab4:
         st.plotly_chart(fig5, use_container_width=True)
     else:
         st.info("No timestamp column available for velocity analysis.")
+
 
