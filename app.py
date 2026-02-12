@@ -133,7 +133,6 @@ if not region_data.empty:
     fig2 = px.choropleth(
         region_df,
         locations="State",
-        locationmode="geojson-id",  # robust mode
         geojson="https://raw.githubusercontent.com/codeforgermany/click_that_hood/main/public/data/india-states.geojson",
         featureidkey="properties.name",
         color="Interest",
@@ -236,6 +235,7 @@ with tab4:
         st.plotly_chart(fig5, use_container_width=True)
     else:
         st.info("No timestamp column available for velocity analysis.")
+
 
 
 
