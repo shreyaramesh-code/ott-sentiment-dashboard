@@ -15,6 +15,9 @@ st.markdown("AI-Augmented Market & Audience Signal System")
 @st.cache_data
 def load_data():
     df = pd.read_csv("youtube_master_clean.csv")
+    st.write("DEBUG – Columns in deployed dataset:")
+    st.write(df.columns.tolist())
+    return df
 
     # Auto-detect sentiment column
     sentiment_col = None
@@ -169,3 +172,4 @@ with tab4:
 
         fig5 = px.line(volume_trend, x="date", y="Volume")
         st.plotly_chart(fig5, use_container_width=True)
+
