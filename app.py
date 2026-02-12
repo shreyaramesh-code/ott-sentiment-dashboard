@@ -88,12 +88,14 @@ region_data = get_region_interest(selected_title)
 # TABS
 # =====================================================
 
-tab1, tab2, tab3, tab4 = st.tabs([
+tab1, tab2, tab3, tab4, tab5 = st.tabs([
     "Market Signals",
     "Audience Intelligence",
     "Investment Radar",
-    "Benchmark & Velocity"
+    "Benchmark & Velocity",
+    "Sentiment Prediction"
 ])
+
 
 # =====================================================
 # TAB 1 – MARKET SIGNALS
@@ -253,4 +255,86 @@ with tab4:
         st.plotly_chart(fig5, use_container_width=True)
     else:
         st.info("No timestamp column available for velocity analysis.")
+
+# ======================================================
+# TAB 5 – LIVE SENTIMENT PREDICTION ENGINE
+# ======================================================
+
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.svm import LinearSVC
+from sklearn.preprocessing import LabelEncoder
+
+with tab5:
+
+    st.subheader("AI Sentiment Classification Engine")
+    st.markdown("Test real-time sentiment prediction using trained model.")
+
+    # ============================
+    # Detect required columns
+    # ============================
+
+    text_col = None
+    for col in df.columns:
+        if "text" in col.lower():
+            text_col = col
+            break
+
+    sentiment_col = None
+    for col in df.columns:
+        if "sentiment" in col.lower():
+            sentiment_col = col
+            break
+
+    if text_col is None or sentiment_col is None:
+        st.error("Required text or sentiment column not found in dataset.")
+        st.stop()
+
+    # ============================
+    # Train Model Once (Cached)
+    # ============================
+
+    @st.cache_resource
+    def train_model(data):
+        vectorizer = TfidfVectorizer(max_features=3000, stop_words="english")
+        X = vectorizer.fit_transform(data[text_col])
+
+        le = LabelEncoder()
+        y = le.fit_transform(data[sentiment_col])
+
+        model = LinearSVC()
+        model.fit(X, y)
+
+        return vectorizer, model, le
+
+    vectorizer, model, le = train_model(df)
+
+    # ============================
+    # User Input
+    # ============================
+
+    user_input = st.text_area("Enter viewer comment to classify:")
+
+    if st.button("Predict Sentiment"):
+
+        if user_input.strip() == "":
+            st.warning("Please enter some text.")
+        else:
+            input_vector = vectorizer.transform([user_input])
+            prediction = model.predict(input_vector)
+            predicted_label = le.inverse_transform(prediction)[0]
+
+            st.success(f"Predicted Sentiment: {predicted_label.upper()}")
+
+            # Confidence Score (Distance from hyperplane)
+            decision_scores = model.decision_function(input_vector)
+
+            if len(le.classes_) == 2:
+                confidence = abs(decision_scores[0]) / np.max(abs(decision_scores))
+            else:
+                confidence = np.max(decision_scores) / np.sum(abs(decision_scores))
+
+            st.metric("Prediction Confidence Score", round(float(confidence), 3))
+
+            # Display probability-style indicator
+            st.progress(float(min(max(confidence, 0), 1)))
 
