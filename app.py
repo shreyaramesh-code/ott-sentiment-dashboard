@@ -107,11 +107,7 @@ with tab1:
         fig1 = px.line(trend_data, y=selected_title)
         st.plotly_chart(fig1, use_container_width=True)
 
-    # ==============================
-    # 🔥 FIXED GEOGRAPHIC MAP PART
-    # ==============================
-
-    st.subheader("Geographic Opportunity – India")
+        st.subheader("Geographic Demand Heatmap – India")
 
     if not region_data.empty:
 
@@ -120,8 +116,9 @@ with tab1:
         region_df = region_df[region_df["Interest"] > 0]
         region_df["State"] = region_df["State"].str.strip()
 
-        # If Google returns state codes
+        # Handle state code case
         if region_df["State"].str.len().max() <= 3:
+
             state_code_map = {
                 "MH": "Maharashtra",
                 "KA": "Karnataka",
@@ -141,36 +138,37 @@ with tab1:
                 "OR": "Odisha",
                 "AS": "Assam"
             }
+
             region_df["State"] = region_df["State"].replace(state_code_map)
 
-        fig2 = px.choropleth(
-            region_df,
-            locations="State",
-            locationmode="country names",
-            color="Interest",
-            color_continuous_scale="Blues",
-            scope="asia"
+        # Sort by interest
+        region_df = region_df.sort_values("Interest", ascending=False)
+
+        # Create Heatmap
+        heatmap_fig = px.imshow(
+            region_df[["Interest"]],
+            labels=dict(color="Search Interest"),
+            x=["Interest Score"],
+            y=region_df["State"],
+            color_continuous_scale="Reds",
+            aspect="auto"
         )
 
-        fig2.update_geos(
-            visible=True,
-            showcountries=True,
-            showcoastlines=False,
-            showland=True,
-            fitbounds="locations",
-            lataxis_range=[6, 38],
-            lonaxis_range=[68, 98]
+        heatmap_fig.update_layout(
+            height=600,
+            xaxis_title="",
+            yaxis_title="State"
         )
 
-        st.plotly_chart(fig2, use_container_width=True)
+        st.plotly_chart(heatmap_fig, use_container_width=True)
 
-        # Executive insight
-        top_states = region_df.sort_values("Interest", ascending=False).head(5)
+        # Add executive insight
         st.markdown("### Top 5 High-Demand States")
-        st.dataframe(top_states)
+        st.dataframe(region_df.head(5))
 
     else:
         st.warning("Google Trends returned no regional data.")
+
 
 # =====================================================
 # TAB 2 – AUDIENCE INTELLIGENCE
@@ -255,3 +253,4 @@ with tab4:
         st.plotly_chart(fig5, use_container_width=True)
     else:
         st.info("No timestamp column available for velocity analysis.")
+
