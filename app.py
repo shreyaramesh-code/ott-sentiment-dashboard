@@ -14,7 +14,7 @@ st.markdown("AI-Augmented Market & Audience Signal System")
 # ============================
 @st.cache_data
 def load_data():
-    df = pd.read_csv("youtube_master.csv")
+    df = pd.read_csv("youtube_master_clean.csv")
     df["published_at"] = pd.to_datetime(df["published_at"], errors="coerce")
     df["date"] = df["published_at"].dt.date
     return df
@@ -168,4 +168,5 @@ with tab4:
         st.success("Viral Acceleration Detected")
     else:
         st.warning("No Significant Viral Acceleration")
+
 
