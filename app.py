@@ -3,7 +3,6 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 import numpy as np
-import requests
 from pytrends.request import TrendReq
 
 st.set_page_config(layout="wide")
@@ -22,12 +21,26 @@ def load_data():
 df = load_data()
 
 # =====================================================
-# AUTO DETECT CRITICAL COLUMNS
+# AUTO DETECT CRITICAL COLUMNS (NO ASSUMPTIONS)
 # =====================================================
 
-sentiment_col = next((col for col in df.columns if "sentiment" in col.lower()), None)
-compound_col = next((col for col in df.columns if "compound" in col.lower()), None)
-date_col = next((col for col in df.columns if "publish" in col.lower()), None)
+sentiment_col = None
+for col in df.columns:
+    if "sentiment" in col.lower():
+        sentiment_col = col
+        break
+
+compound_col = None
+for col in df.columns:
+    if "compound" in col.lower():
+        compound_col = col
+        break
+
+date_col = None
+for col in df.columns:
+    if "publish" in col.lower():
+        date_col = col
+        break
 
 if sentiment_col is None:
     st.error("No sentiment column detected in dataset.")
@@ -42,7 +55,7 @@ if date_col:
     df["date"] = df[date_col].dt.date
 
 # =====================================================
-# SIDEBAR
+# GOOGLE TRENDS
 # =====================================================
 
 st.sidebar.header("Market Intelligence")
@@ -58,10 +71,6 @@ selected_title = st.sidebar.selectbox(
 
 pytrends = TrendReq(hl='en-IN', tz=330)
 
-# =====================================================
-# GOOGLE TRENDS DATA
-# =====================================================
-
 @st.cache_data(ttl=3600)
 def get_trends(keyword):
     pytrends.build_payload([keyword], timeframe='today 3-m', geo='IN')
@@ -74,17 +83,6 @@ def get_region_interest(keyword):
 
 trend_data = get_trends(selected_title)
 region_data = get_region_interest(selected_title)
-
-# =====================================================
-# LOAD GEOJSON PROPERLY
-# =====================================================
-
-@st.cache_data
-def load_geojson():
-    url = "https://raw.githubusercontent.com/codeforgermany/click_that_hood/main/public/data/india-states.geojson"
-    return requests.get(url).json()
-
-india_geojson = load_geojson()
 
 # =====================================================
 # TABS
@@ -108,8 +106,10 @@ with tab1:
     if not trend_data.empty:
         fig1 = px.line(trend_data, y=selected_title)
         st.plotly_chart(fig1, use_container_width=True)
-    else:
-        st.warning("No trend data available.")
+
+    # ==============================
+    # 🔥 FIXED GEOGRAPHIC MAP PART
+    # ==============================
 
     st.subheader("Geographic Opportunity – India")
 
@@ -117,53 +117,54 @@ with tab1:
 
         region_df = region_data.reset_index()
         region_df.columns = ["State", "Interest"]
-
         region_df = region_df[region_df["Interest"] > 0]
         region_df["State"] = region_df["State"].str.strip()
 
-        # Fix common Google Trends naming mismatches
-        name_map = {
-            "Delhi": "NCT of Delhi",
-            "Jammu & Kashmir": "Jammu and Kashmir",
-            "Andaman & Nicobar Islands": "Andaman and Nicobar Islands",
-            "Dadra & Nagar Haveli": "Dadra and Nagar Haveli",
-            "Daman & Diu": "Daman and Diu"
-        }
-
-        region_df["State"] = region_df["State"].replace(name_map)
-
-        # If Google Trends returns state codes instead of names
+        # If Google returns state codes
         if region_df["State"].str.len().max() <= 3:
             state_code_map = {
                 "MH": "Maharashtra",
                 "KA": "Karnataka",
                 "TN": "Tamil Nadu",
-                "DL": "NCT of Delhi",
+                "DL": "Delhi",
                 "UP": "Uttar Pradesh",
                 "WB": "West Bengal",
                 "RJ": "Rajasthan",
                 "GJ": "Gujarat",
-                "HR": "Haryana"
+                "HR": "Haryana",
+                "PB": "Punjab",
+                "MP": "Madhya Pradesh",
+                "AP": "Andhra Pradesh",
+                "TS": "Telangana",
+                "KL": "Kerala",
+                "BR": "Bihar",
+                "OR": "Odisha",
+                "AS": "Assam"
             }
             region_df["State"] = region_df["State"].replace(state_code_map)
 
         fig2 = px.choropleth(
             region_df,
-            geojson=india_geojson,
             locations="State",
-            featureidkey="properties.name",
+            locationmode="country names",
             color="Interest",
-            color_continuous_scale="Blues"
+            color_continuous_scale="Blues",
+            scope="asia"
         )
 
         fig2.update_geos(
+            visible=True,
+            showcountries=True,
+            showcoastlines=False,
+            showland=True,
             fitbounds="locations",
-            visible=False
+            lataxis_range=[6, 38],
+            lonaxis_range=[68, 98]
         )
 
         st.plotly_chart(fig2, use_container_width=True)
 
-        # Add actionable insights
+        # Executive insight
         top_states = region_df.sort_values("Interest", ascending=False).head(5)
         st.markdown("### Top 5 High-Demand States")
         st.dataframe(top_states)
@@ -189,7 +190,7 @@ with tab2:
     emotion_cols = ["joy","trust","anticipation","sadness"]
     available_emotions = [col for col in emotion_cols if col in df.columns]
 
-    if available_emotions:
+    if len(available_emotions) > 0:
         emotion_means = df[available_emotions].mean()
         fig3 = go.Figure(data=go.Bar(
             x=emotion_means.index,
