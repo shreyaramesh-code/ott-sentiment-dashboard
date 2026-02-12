@@ -9,18 +9,59 @@ st.set_page_config(layout="wide")
 st.title("Pre-Release OTT Content Intelligence Platform")
 st.markdown("AI-Augmented Market & Audience Signal System")
 
-# ============================
-# LOAD YOUTUBE DATA
-# ============================
+# =====================================================
+# LOAD DATA
+# =====================================================
+
 @st.cache_data
 def load_data():
     df = pd.read_csv("youtube_master_clean.csv")
+    return df
 
 df = load_data()
 
-# ============================
+# =====================================================
+# AUTO DETECT CRITICAL COLUMNS (NO ASSUMPTIONS)
+# =====================================================
+
+# Detect sentiment column
+sentiment_col = None
+for col in df.columns:
+    if "sentiment" in col.lower():
+        sentiment_col = col
+        break
+
+# Detect compound column
+compound_col = None
+for col in df.columns:
+    if "compound" in col.lower():
+        compound_col = col
+        break
+
+# Detect published_at
+date_col = None
+for col in df.columns:
+    if "publish" in col.lower():
+        date_col = col
+        break
+
+# Stop safely if essential columns missing
+if sentiment_col is None:
+    st.error("No sentiment column detected in dataset.")
+    st.stop()
+
+if compound_col is None:
+    st.error("No compound score column detected.")
+    st.stop()
+
+# Convert date if available
+if date_col:
+    df[date_col] = pd.to_datetime(df[date_col], errors="coerce")
+    df["date"] = df[date_col].dt.date
+
+# =====================================================
 # GOOGLE TRENDS REAL-TIME
-# ============================
+# =====================================================
 
 st.sidebar.header("Market Intelligence")
 
@@ -39,14 +80,13 @@ pytrends = TrendReq(hl='en-IN', tz=330)
 def get_trends(keyword):
     pytrends.build_payload([keyword], timeframe='today 3-m', geo='IN')
     interest_over_time = pytrends.interest_over_time()
-    region_interest = pytrends.interest_by_region(resolution='REGION', inc_low_vol=True)
-    return interest_over_time, region_interest
+    return interest_over_time
 
-trend_data, region_data = get_trends(selected_title)
+trend_data = get_trends(selected_title)
 
-# ============================
+# =====================================================
 # TABS
-# ============================
+# =====================================================
 
 tab1, tab2, tab3, tab4 = st.tabs([
     "Market Signals",
@@ -55,9 +95,9 @@ tab1, tab2, tab3, tab4 = st.tabs([
     "Benchmark & Velocity"
 ])
 
-# ======================================================
+# =====================================================
 # TAB 1 – MARKET SIGNALS
-# ======================================================
+# =====================================================
 
 with tab1:
 
@@ -67,22 +107,27 @@ with tab1:
         fig1 = px.line(trend_data, y=selected_title)
         st.plotly_chart(fig1, use_container_width=True)
 
-# ======================================================
+# =====================================================
 # TAB 2 – AUDIENCE INTELLIGENCE
-# ======================================================
+# =====================================================
 
 with tab2:
 
-    positive_ratio = (df["sentiment_label"] == "positive").mean()
-    negative_ratio = (df["sentiment_label"] == "negative").mean()
+    positive_ratio = (df[sentiment_col].str.lower() == "positive").mean()
+    negative_ratio = (df[sentiment_col].str.lower() == "negative").mean()
+    net_sentiment = df[compound_col].mean()
 
     col1, col2, col3 = st.columns(3)
     col1.metric("Positive Ratio", f"{round(positive_ratio*100,2)}%")
     col2.metric("Negative Risk", f"{round(negative_ratio*100,2)}%")
-    col3.metric("Net Sentiment", round(df["compound"].mean(),3))
+    col3.metric("Net Sentiment Score", round(net_sentiment,3))
 
-    if all(col in df.columns for col in ["joy","anticipation"]):
-        emotion_means = df[["joy","trust","anticipation","sadness"]].mean()
+    # Emotion safely if exists
+    emotion_cols = ["joy","trust","anticipation","sadness"]
+    available_emotions = [col for col in emotion_cols if col in df.columns]
+
+    if len(available_emotions) > 0:
+        emotion_means = df[available_emotions].mean()
         fig3 = go.Figure(data=go.Bar(
             x=emotion_means.index,
             y=emotion_means.values
@@ -90,24 +135,30 @@ with tab2:
         fig3.update_layout(title="Emotional Drivers")
         st.plotly_chart(fig3, use_container_width=True)
 
-# ======================================================
+# =====================================================
 # TAB 3 – INVESTMENT RADAR
-# ======================================================
+# =====================================================
 
 with tab3:
 
-    positive_ratio = (df["sentiment_label"] == "positive").mean()
-    negative_ratio = (df["sentiment_label"] == "negative").mean()
+    positive_ratio = (df[sentiment_col].str.lower() == "positive").mean()
+    negative_ratio = (df[sentiment_col].str.lower() == "negative").mean()
 
-    ssi = (df["compound"].mean()+1)/2
+    # Sentiment Strength Index
+    ssi = (df[compound_col].mean() + 1) / 2
 
-    if all(col in df.columns for col in ["joy","anticipation"]):
-        eei = (df["joy"].mean()+df["anticipation"].mean())/2
+    # Emotional Excitement (fallback if not available)
+    if "joy" in df.columns and "anticipation" in df.columns:
+        eei = (df["joy"].mean() + df["anticipation"].mean()) / 2
     else:
         eei = ssi
 
-    velocity = df.groupby("date").size().pct_change().mean()
-    velocity = 0 if pd.isna(velocity) else velocity
+    # Velocity
+    if "date" in df.columns:
+        velocity = df.groupby("date").size().pct_change().mean()
+        velocity = 0 if pd.isna(velocity) else velocity
+    else:
+        velocity = 0
 
     categories = ['Sentiment Strength','Excitement','Momentum','Low Risk']
     values = [
@@ -131,9 +182,9 @@ with tab3:
 
     st.plotly_chart(fig4, use_container_width=True)
 
-# ======================================================
+# =====================================================
 # TAB 4 – VELOCITY
-# ======================================================
+# =====================================================
 
 with tab4:
 
@@ -142,4 +193,5 @@ with tab4:
 
         fig5 = px.line(volume_trend, x="date", y="Volume")
         st.plotly_chart(fig5, use_container_width=True)
-
+    else:
+        st.info("No timestamp column available for velocity analysis.")
