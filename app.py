@@ -118,58 +118,32 @@ if not region_data.empty:
     region_df = region_df[region_df["Interest"] > 0]
     region_df["State"] = region_df["State"].str.strip()
 
-    # Map state names to ISO codes
-    state_iso_map = {
-        "Andhra Pradesh": "IN-AP",
-        "Arunachal Pradesh": "IN-AR",
-        "Assam": "IN-AS",
-        "Bihar": "IN-BR",
-        "Chhattisgarh": "IN-CT",
-        "Delhi": "IN-DL",
-        "Goa": "IN-GA",
-        "Gujarat": "IN-GJ",
-        "Haryana": "IN-HR",
-        "Himachal Pradesh": "IN-HP",
-        "Jharkhand": "IN-JH",
-        "Karnataka": "IN-KA",
-        "Kerala": "IN-KL",
-        "Madhya Pradesh": "IN-MP",
-        "Maharashtra": "IN-MH",
-        "Manipur": "IN-MN",
-        "Meghalaya": "IN-ML",
-        "Mizoram": "IN-MZ",
-        "Nagaland": "IN-NL",
-        "Odisha": "IN-OR",
-        "Punjab": "IN-PB",
-        "Rajasthan": "IN-RJ",
-        "Sikkim": "IN-SK",
-        "Tamil Nadu": "IN-TN",
-        "Telangana": "IN-TS",
-        "Tripura": "IN-TR",
-        "Uttar Pradesh": "IN-UP",
-        "Uttarakhand": "IN-UT",
-        "West Bengal": "IN-WB"
+    # Fix common naming mismatches
+    name_map = {
+        "Jammu & Kashmir": "Jammu and Kashmir",
+        "Andaman & Nicobar Islands": "Andaman and Nicobar Islands",
+        "Dadra & Nagar Haveli": "Dadra and Nagar Haveli",
+        "Daman & Diu": "Daman and Diu"
     }
 
-    region_df["ISO"] = region_df["State"].map(state_iso_map)
+    region_df["State"] = region_df["State"].replace(name_map)
 
-    # Drop unmatched rows
-    region_df = region_df.dropna(subset=["ISO"])
-
-    fig = go.Figure(go.Choropleth(
-        locations=region_df["ISO"],
-        z=region_df["Interest"],
-        locationmode="ISO-3166-2",
-        colorscale="Reds",
-        colorbar_title="Search Interest"
-    ))
+    fig = px.choropleth(
+        region_df,
+        locations="State",
+        locationmode="country names",
+        color="Interest",
+        color_continuous_scale="Reds",
+        scope="asia",
+        hover_name="State"
+    )
 
     fig.update_geos(
-        scope="asia",
         fitbounds="locations",
-        showcountries=False,
+        showcountries=True,
         showcoastlines=False,
-        showland=True
+        showland=True,
+        projection_type="mercator"
     )
 
     fig.update_layout(
@@ -184,6 +158,7 @@ if not region_data.empty:
 
 else:
     st.warning("Google Trends returned no regional data.")
+
 
 
 # =====================================================
@@ -269,5 +244,6 @@ with tab4:
         st.plotly_chart(fig5, use_container_width=True)
     else:
         st.info("No timestamp column available for velocity analysis.")
+
 
 
