@@ -3,21 +3,15 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 import numpy as np
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.svm import LinearSVC
-from sklearn.preprocessing import LabelEncoder
 
-# =====================================================
-# CONFIGURATION
-# =====================================================
-st.set_page_config(page_title="OTT Content Intelligence Dashboard", layout="wide")
+st.set_page_config(page_title="Content Intelligence Engine", layout="wide")
 
-st.title("OTT Content Acquisition Intelligence Interface")
-st.markdown("Pre-release Audience Signal Analysis for Indian Market")
+st.title("Content Acquisition Intelligence Engine")
+st.markdown("Pre-Release OTT Investment Signal Dashboard – Indian Market")
 
-# =====================================================
+# -------------------------------------------------
 # LOAD DATA
-# =====================================================
+# -------------------------------------------------
 @st.cache_data
 def load_data():
     df = pd.read_csv("youtube_sentiment.csv")
@@ -27,80 +21,88 @@ def load_data():
 
 df = load_data()
 
-# =====================================================
-# SIDEBAR FILTERS
-# =====================================================
-st.sidebar.header("Data Scope")
+# -------------------------------------------------
+# VIDEO FILTER
+# -------------------------------------------------
+video_ids = df["video_id"].unique().tolist()
 
-video_type_filter = st.sidebar.selectbox(
-    "Video Type",
-    ["All"] + list(df["video_type"].unique()) if "video_type" in df.columns else ["All"]
-)
+selected_video = st.sidebar.selectbox("Select Content (Video ID)", ["All"] + video_ids)
 
 filtered_df = df.copy()
+if selected_video != "All":
+    filtered_df = filtered_df[filtered_df["video_id"] == selected_video]
 
-if video_type_filter != "All" and "video_type" in df.columns:
-    filtered_df = filtered_df[filtered_df["video_type"] == video_type_filter]
+# -------------------------------------------------
+# CALCULATE INDICES
+# -------------------------------------------------
 
-# =====================================================
-# COMPUTE CORE METRICS
-# =====================================================
-total_comments = len(filtered_df)
-positive_ratio = (filtered_df["sentiment_label"] == "positive").mean()
+# Sentiment Strength Index
+ssi = filtered_df["compound"].mean()
+ssi_scaled = (ssi + 1) / 2 * 100  # normalize from -1,1 → 0,100
+
+# Polarization Risk Index
 negative_ratio = (filtered_df["sentiment_label"] == "negative").mean()
-net_sentiment = filtered_df["compound"].mean()
-engagement_intensity = filtered_df["likes"].mean()
+sentiment_variance = filtered_df["compound"].var()
+pri = (negative_ratio * 100) + (sentiment_variance * 50)
 
-risk_index = negative_ratio * 100
+# Engagement Velocity Index
+daily_counts = filtered_df.groupby("date").size().reset_index(name="volume")
+if len(daily_counts) > 5:
+    first_half = daily_counts["volume"].iloc[:len(daily_counts)//2].mean()
+    second_half = daily_counts["volume"].iloc[len(daily_counts)//2:].mean()
+    evi = ((second_half - first_half) / (first_half + 1)) * 100
+else:
+    evi = 0
 
-# =====================================================
+# Emotional Excitement Index
+if "joy" in filtered_df.columns:
+    eei = (filtered_df["joy"].mean() + filtered_df["anticipation"].mean()) * 50
+else:
+    eei = 0
+
+# Investment Confidence Score
+ics = (0.30 * ssi_scaled/100 +
+       0.25 * eei/100 +
+       0.25 * (evi/100) -
+       0.20 * (pri/100))
+
+ics_score = round(max(min(ics * 10, 10), 0), 2)
+
+# -------------------------------------------------
 # TABS
-# =====================================================
+# -------------------------------------------------
 tab1, tab2, tab3, tab4 = st.tabs([
-    "Executive Intelligence",
-    "Audience Structure",
-    "Engagement & Momentum",
-    "ML Decision Engine"
+    "Acquisition Overview",
+    "Content Diagnostics",
+    "Momentum & Growth",
+    "Investment Model"
 ])
 
-# =====================================================
-# TAB 1 — EXECUTIVE INTELLIGENCE
-# =====================================================
+# -------------------------------------------------
+# TAB 1 — OVERVIEW
+# -------------------------------------------------
 with tab1:
 
     col1, col2, col3, col4 = st.columns(4)
-
-    col1.metric("Audience Signals Captured", total_comments)
-    col2.metric("Positive Sentiment Ratio", f"{round(positive_ratio*100,2)}%")
-    col3.metric("Negative Risk Index", f"{round(risk_index,2)}%")
-    col4.metric("Net Sentiment Score", round(net_sentiment,3))
+    col1.metric("Sentiment Strength Index", round(ssi_scaled,2))
+    col2.metric("Polarization Risk Index", round(pri,2))
+    col3.metric("Engagement Velocity Index", round(evi,2))
+    col4.metric("Emotional Excitement Index", round(eei,2))
 
     st.divider()
 
-    # Feasibility Recommendation Logic
-    if positive_ratio > 0.65 and negative_ratio < 0.15:
-        recommendation = "High Acquisition Potential"
-        confidence = "Strong"
-    elif positive_ratio > 0.50:
-        recommendation = "Moderate Acquisition Potential"
-        confidence = "Medium"
+    st.metric("Investment Confidence Score (0–10)", ics_score)
+
+    if ics_score >= 7:
+        st.success("Strategic Acquisition Opportunity – Strong Pre-Release Signal")
+    elif ics_score >= 5:
+        st.warning("Moderate Potential – Conditional Investment Recommended")
     else:
-        recommendation = "Acquisition Risk Present"
-        confidence = "Caution Advised"
+        st.error("High Risk – Acquisition Caution Advised")
 
-    col5, col6 = st.columns(2)
-
-    col5.metric("Acquisition Recommendation", recommendation)
-    col6.metric("Confidence Level", confidence)
-
-    st.markdown("""
-    This recommendation is derived from aggregated polarity balance, 
-    emotional drivers, and engagement strength.
-    """)
-
-# =====================================================
-# TAB 2 — AUDIENCE STRUCTURE
-# =====================================================
+# -------------------------------------------------
+# TAB 2 — CONTENT DIAGNOSTICS
+# -------------------------------------------------
 with tab2:
 
     st.subheader("Sentiment Distribution")
@@ -111,96 +113,71 @@ with tab2:
     fig1 = px.bar(sentiment_counts,
                   x="Sentiment",
                   y="Count",
-                  color="Sentiment",
-                  title="Sentiment Class Distribution")
-
+                  color="Sentiment")
     st.plotly_chart(fig1, use_container_width=True)
 
     if "joy" in filtered_df.columns:
-        st.subheader("Emotional Contribution Matrix")
+        st.subheader("Emotion Contribution Heatmap")
 
-        emotion_cols = ["joy", "trust", "anticipation", "sadness"]
-        emotion_data = filtered_df[emotion_cols].mean()
+        emotion_cols = ["joy","trust","anticipation","sadness"]
+        emotion_means = filtered_df[emotion_cols].mean()
 
         fig2 = go.Figure(data=go.Heatmap(
-            z=[emotion_data.values],
+            z=[emotion_means.values],
             x=emotion_cols,
-            y=["Average Emotional Strength"],
+            y=["Intensity"],
             colorscale="Blues"
         ))
-
-        fig2.update_layout(title="Emotion Intensity Overview")
         st.plotly_chart(fig2, use_container_width=True)
 
-    if "video_type" in filtered_df.columns:
-        st.subheader("Sentiment by Video Format")
+    st.subheader("Compound Sentiment Distribution")
 
-        format_sentiment = filtered_df.groupby("video_type")["compound"].mean().reset_index()
+    fig3 = px.histogram(filtered_df,
+                        x="compound",
+                        nbins=30)
+    st.plotly_chart(fig3, use_container_width=True)
 
-        fig3 = px.bar(format_sentiment,
-                      x="video_type",
-                      y="compound",
-                      title="Average Sentiment by Format")
-
-        st.plotly_chart(fig3, use_container_width=True)
-
-# =====================================================
-# TAB 3 — ENGAGEMENT & MOMENTUM
-# =====================================================
+# -------------------------------------------------
+# TAB 3 — MOMENTUM
+# -------------------------------------------------
 with tab3:
 
-    st.subheader("Sentiment Momentum Over Time")
-
     if "date" in filtered_df.columns:
-        trend = filtered_df.groupby("date")["compound"].mean().reset_index()
+        daily_sentiment = filtered_df.groupby("date")["compound"].mean().reset_index()
 
-        fig4 = px.line(trend,
+        fig4 = px.line(daily_sentiment,
                        x="date",
                        y="compound",
-                       title="Daily Sentiment Trend")
-
+                       title="Sentiment Momentum")
         st.plotly_chart(fig4, use_container_width=True)
 
-    st.subheader("Engagement Intensity Trend")
-
-    if "date" in filtered_df.columns:
-        volume_trend = filtered_df.groupby("date").size().reset_index(name="Comment Volume")
-
+        volume_trend = filtered_df.groupby("date").size().reset_index(name="Volume")
         fig5 = px.line(volume_trend,
                        x="date",
-                       y="Comment Volume",
-                       title="Comment Volume Over Time")
-
+                       y="Volume",
+                       title="Audience Signal Volume Growth")
         st.plotly_chart(fig5, use_container_width=True)
 
-# =====================================================
-# TAB 4 — ML DECISION ENGINE
-# =====================================================
+# -------------------------------------------------
+# TAB 4 — INVESTMENT SIMULATION
+# -------------------------------------------------
 with tab4:
 
-    st.subheader("Supervised Sentiment Classification Model")
+    st.subheader("Scenario Sensitivity Model")
 
-    @st.cache_resource
-    def train_model(data):
-        vectorizer = TfidfVectorizer(max_features=3000, stop_words="english")
-        X = vectorizer.fit_transform(data["analysis_text"])
-        le = LabelEncoder()
-        y = le.fit_transform(data["sentiment_label"])
-        model = LinearSVC()
-        model.fit(X, y)
-        return vectorizer, model, le
+    marketing_push = st.slider("Marketing Amplification Factor", 0.5, 2.0, 1.0)
 
-    vectorizer, model, le = train_model(df)
+    adjusted_evi = evi * marketing_push
+
+    adjusted_ics = (0.30 * ssi_scaled/100 +
+                    0.25 * eei/100 +
+                    0.25 * (adjusted_evi/100) -
+                    0.20 * (pri/100))
+
+    adjusted_score = round(max(min(adjusted_ics * 10, 10), 0), 2)
+
+    st.metric("Adjusted Investment Confidence Score", adjusted_score)
 
     st.markdown("""
-    The classifier has been trained on 12,000+ audience comments. 
-    It generalizes sentiment detection at scale for acquisition analytics.
+    This simulation estimates how promotional amplification impacts acquisition confidence.
     """)
-
-    user_input = st.text_area("Test Comment Classification")
-
-    if st.button("Run Classification"):
-        input_vector = vectorizer.transform([user_input])
-        prediction = model.predict(input_vector)
-        predicted_label = le.inverse_transform(prediction)[0]
-        st.write("Predicted Sentiment:", predicted_label)
