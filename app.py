@@ -15,8 +15,32 @@ st.markdown("AI-Augmented Market & Audience Signal System")
 @st.cache_data
 def load_data():
     df = pd.read_csv("youtube_master_clean.csv")
-    df["published_at"] = pd.to_datetime(df["published_at"], errors="coerce")
-    df["date"] = df["published_at"].dt.date
+
+    # Auto-detect sentiment column
+    sentiment_col = None
+    for col in df.columns:
+        if "sentiment" in col.lower():
+            sentiment_col = col
+            break
+
+    if sentiment_col:
+        df.rename(columns={sentiment_col: "sentiment_label"}, inplace=True)
+
+    # Auto-detect compound column
+    compound_col = None
+    for col in df.columns:
+        if "compound" in col.lower():
+            compound_col = col
+            break
+
+    if compound_col:
+        df.rename(columns={compound_col: "compound"}, inplace=True)
+
+    # Handle published_at safely
+    if "published_at" in df.columns:
+        df["published_at"] = pd.to_datetime(df["published_at"], errors="coerce")
+        df["date"] = df["published_at"].dt.date
+
     return df
 
 df = load_data()
@@ -59,7 +83,7 @@ tab1, tab2, tab3, tab4 = st.tabs([
 ])
 
 # ======================================================
-# TAB 1 – MARKET SIGNALS (Google Trends)
+# TAB 1 – MARKET SIGNALS
 # ======================================================
 
 with tab1:
@@ -67,26 +91,8 @@ with tab1:
     st.subheader("Interest Over Time – India")
 
     if not trend_data.empty:
-        fig1 = px.line(trend_data, y=selected_title,
-                       title="Google Search Interest Trend")
+        fig1 = px.line(trend_data, y=selected_title)
         st.plotly_chart(fig1, use_container_width=True)
-
-    st.subheader("Geographic Opportunity Map")
-
-    if not region_data.empty:
-        region_df = region_data.reset_index()
-        region_df.columns = ["State", "Interest"]
-
-        fig2 = px.choropleth(
-            region_df,
-            locations="State",
-            locationmode="country names",
-            color="Interest",
-            color_continuous_scale="Blues",
-            title="Search Interest by Region (India)"
-        )
-
-        st.plotly_chart(fig2, use_container_width=True)
 
 # ======================================================
 # TAB 2 – AUDIENCE INTELLIGENCE
@@ -102,13 +108,11 @@ with tab2:
     col2.metric("Negative Risk", f"{round(negative_ratio*100,2)}%")
     col3.metric("Net Sentiment", round(df["compound"].mean(),3))
 
-    if "joy" in df.columns:
-        emotion_cols = ["joy","trust","anticipation","sadness"]
-        emotion_means = df[emotion_cols].mean()
-
+    if all(col in df.columns for col in ["joy","anticipation"]):
+        emotion_means = df[["joy","trust","anticipation","sadness"]].mean()
         fig3 = go.Figure(data=go.Bar(
-            x=emotion_cols,
-            y=emotion_means
+            x=emotion_means.index,
+            y=emotion_means.values
         ))
         fig3.update_layout(title="Emotional Drivers")
         st.plotly_chart(fig3, use_container_width=True)
@@ -119,17 +123,25 @@ with tab2:
 
 with tab3:
 
+    positive_ratio = (df["sentiment_label"] == "positive").mean()
+    negative_ratio = (df["sentiment_label"] == "negative").mean()
+
     ssi = (df["compound"].mean()+1)/2
-    eei = (df["joy"].mean()+df["anticipation"].mean())/2
-    risk = negative_ratio
+
+    if all(col in df.columns for col in ["joy","anticipation"]):
+        eei = (df["joy"].mean()+df["anticipation"].mean())/2
+    else:
+        eei = ssi
+
     velocity = df.groupby("date").size().pct_change().mean()
+    velocity = 0 if pd.isna(velocity) else velocity
 
     categories = ['Sentiment Strength','Excitement','Momentum','Low Risk']
     values = [
         ssi,
         eei,
-        velocity if not np.isnan(velocity) else 0,
-        1-risk
+        velocity,
+        1-negative_ratio
     ]
 
     fig4 = go.Figure()
@@ -141,33 +153,19 @@ with tab3:
 
     fig4.update_layout(
         polar=dict(radialaxis=dict(visible=True, range=[0,1])),
-        showlegend=False,
-        title="Composite Investment Radar"
+        showlegend=False
     )
 
     st.plotly_chart(fig4, use_container_width=True)
 
 # ======================================================
-# TAB 4 – BENCHMARK & VIRAL VELOCITY
+# TAB 4 – VELOCITY
 # ======================================================
 
 with tab4:
 
-    st.subheader("Audience Signal Growth")
+    if "date" in df.columns:
+        volume_trend = df.groupby("date").size().reset_index(name="Volume")
 
-    volume_trend = df.groupby("date").size().reset_index(name="Volume")
-
-    fig5 = px.line(volume_trend,
-                   x="date",
-                   y="Volume",
-                   title="Comment Velocity")
-
-    st.plotly_chart(fig5, use_container_width=True)
-
-    if velocity and velocity > 0:
-        st.success("Viral Acceleration Detected")
-    else:
-        st.warning("No Significant Viral Acceleration")
-
-
-
+        fig5 = px.line(volume_trend, x="date", y="Volume")
+        st.plotly_chart(fig5, use_container_width=True)
