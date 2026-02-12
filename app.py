@@ -107,6 +107,38 @@ with tab1:
         fig1 = px.line(trend_data, y=selected_title)
         st.plotly_chart(fig1, use_container_width=True)
 
+    # ===== Fetch region interest separately (safe)
+    @st.cache_data(ttl=3600)
+    def get_region_interest(keyword):
+        pytrends.build_payload([keyword], timeframe='today 3-m', geo='IN')
+        region_interest = pytrends.interest_by_region(resolution='REGION', inc_low_vol=True)
+        return region_interest
+
+    region_data = get_region_interest(selected_title)
+
+    st.subheader("Geographic Opportunity Map (India)")
+
+    if not region_data.empty:
+
+        region_df = region_data.reset_index()
+        region_df.columns = ["State", "Interest"]
+
+        fig2 = px.choropleth(
+            region_df,
+            geojson=None,
+            locations="State",
+            locationmode="country names",
+            color="Interest",
+            scope="asia",
+            color_continuous_scale="Blues"
+        )
+
+        fig2.update_geos(fitbounds="locations", visible=False)
+        st.plotly_chart(fig2, use_container_width=True)
+
+    else:
+        st.info("No region-level data returned.")
+
 # =====================================================
 # TAB 2 – AUDIENCE INTELLIGENCE
 # =====================================================
@@ -195,3 +227,4 @@ with tab4:
         st.plotly_chart(fig5, use_container_width=True)
     else:
         st.info("No timestamp column available for velocity analysis.")
+
