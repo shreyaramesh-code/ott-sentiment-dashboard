@@ -108,44 +108,45 @@ with tab1:
         fig1 = px.line(trend_data, y=selected_title)
         st.plotly_chart(fig1, use_container_width=True)
 
-    # -------- REGION DATA --------
-    @st.cache_data(ttl=3600)
-    def get_region_interest(keyword):
-        pytrends.build_payload([keyword], timeframe='today 3-m', geo='IN')
-        region_interest = pytrends.interest_by_region(
-            resolution='REGION',
-            inc_low_vol=True
-        )
-        return region_interest
+   # -------- REGION DATA --------
+@st.cache_data(ttl=3600)
+def get_region_interest(keyword):
+    pytrends.build_payload([keyword], timeframe='today 3-m', geo='IN')
+    region_interest = pytrends.interest_by_region(
+        resolution='REGION',
+        inc_low_vol=True
+    )
+    return region_interest
 
-    region_data = get_region_interest(selected_title)
+region_data = get_region_interest(selected_title)
 
-    st.subheader("Geographic Opportunity Map – India")
+st.subheader("Geographic Opportunity – India")
 
-    if not region_data.empty:
+if not region_data.empty:
 
-        region_df = region_data.reset_index()
-        region_df.columns = ["State", "Interest"]
+    region_df = region_data.reset_index()
+    region_df.columns = ["State", "Interest"]
 
-        # Load India GeoJSON
-        india_geojson_url = "https://raw.githubusercontent.com/codeforgermany/click_that_hood/main/public/data/india-states.geojson"
+    # Remove zero interest states (cleaner visualization)
+    region_df = region_df[region_df["Interest"] > 0]
 
-        fig2 = px.choropleth(
-            region_df,
-            geojson=india_geojson_url,
-            locations="State",
-            featureidkey="properties.name",
-            color="Interest",
-            color_continuous_scale="Blues",
-            scope="asia"
-        )
+    fig2 = px.choropleth(
+        region_df,
+        locations="State",
+        locationmode="geojson-id",  # robust mode
+        geojson="https://raw.githubusercontent.com/codeforgermany/click_that_hood/main/public/data/india-states.geojson",
+        featureidkey="properties.name",
+        color="Interest",
+        color_continuous_scale="Blues",
+    )
 
-        fig2.update_geos(fitbounds="locations", visible=False)
+    fig2.update_geos(fitbounds="locations", visible=False)
 
-        st.plotly_chart(fig2, use_container_width=True)
+    st.plotly_chart(fig2, use_container_width=True)
 
-    else:
-        st.info("No regional interest data returned.")
+else:
+    st.warning("Google Trends returned no regional data.")
+
 
 # =====================================================
 # TAB 2 – AUDIENCE INTELLIGENCE
@@ -235,5 +236,6 @@ with tab4:
         st.plotly_chart(fig5, use_container_width=True)
     else:
         st.info("No timestamp column available for velocity analysis.")
+
 
 
