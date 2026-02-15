@@ -4,10 +4,15 @@ import plotly.express as px
 import plotly.graph_objects as go
 import numpy as np
 from pytrends.request import TrendReq
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.svm import LinearSVC
+from sklearn.preprocessing import LabelEncoder
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import classification_report, confusion_matrix
 
 st.set_page_config(layout="wide")
-st.title("Pre-Release OTT Content Intelligence Platform")
-st.markdown("AI-Augmented Market & Audience Signal System")
+st.title("Pre-Release OTT Acquisition Intelligence System")
+st.markdown("Decision Analytics Framework for Korean Content – Indian Market")
 
 # =====================================================
 # LOAD DATA
@@ -15,39 +20,21 @@ st.markdown("AI-Augmented Market & Audience Signal System")
 
 @st.cache_data
 def load_data():
-    df = pd.read_csv("youtube_master_clean.csv")
-    return df
+    return pd.read_csv("youtube_master_clean.csv")
 
 df = load_data()
 
 # =====================================================
-# AUTO DETECT CRITICAL COLUMNS (NO ASSUMPTIONS)
+# AUTO DETECT REQUIRED COLUMNS
 # =====================================================
 
-sentiment_col = None
-for col in df.columns:
-    if "sentiment" in col.lower():
-        sentiment_col = col
-        break
+sentiment_col = next((c for c in df.columns if "sentiment" in c.lower()), None)
+compound_col = next((c for c in df.columns if "compound" in c.lower()), None)
+text_col = next((c for c in df.columns if "text" in c.lower()), None)
+date_col = next((c for c in df.columns if "publish" in c.lower()), None)
 
-compound_col = None
-for col in df.columns:
-    if "compound" in col.lower():
-        compound_col = col
-        break
-
-date_col = None
-for col in df.columns:
-    if "publish" in col.lower():
-        date_col = col
-        break
-
-if sentiment_col is None:
-    st.error("No sentiment column detected in dataset.")
-    st.stop()
-
-if compound_col is None:
-    st.error("No compound score column detected.")
+if not sentiment_col or not compound_col:
+    st.error("Dataset missing required sentiment columns.")
     st.stop()
 
 if date_col:
@@ -58,15 +45,11 @@ if date_col:
 # GOOGLE TRENDS
 # =====================================================
 
-st.sidebar.header("Market Intelligence")
+st.sidebar.header("Content Selection")
 
 selected_title = st.sidebar.selectbox(
-    "Select Title for Market Analysis",
-    [
-        "Squid Game",
-        "Squid Game 2",
-        "Can This Love Be Translated"
-    ]
+    "Select Title",
+    ["Squid Game", "Squid Game 2", "Can This Love Be Translated"]
 )
 
 pytrends = TrendReq(hl='en-IN', tz=330)
@@ -76,105 +59,41 @@ def get_trends(keyword):
     pytrends.build_payload([keyword], timeframe='today 3-m', geo='IN')
     return pytrends.interest_over_time()
 
-@st.cache_data(ttl=3600)
-def get_region_interest(keyword):
-    pytrends.build_payload([keyword], timeframe='today 3-m', geo='IN')
-    return pytrends.interest_by_region(resolution='REGION', inc_low_vol=True)
-
 trend_data = get_trends(selected_title)
-region_data = get_region_interest(selected_title)
 
 # =====================================================
 # TABS
 # =====================================================
 
-tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
+tab1, tab2, tab3, tab4, tab5 = st.tabs([
     "Market Demand",
     "Audience Perception",
     "Risk Analysis",
     "Acquisition Engine",
-    "Sentiment Prediction",
-    "Signal Reliability"
+    "Tools & Model Validation"
 ])
 
-
 # =====================================================
-# TAB 1 – MARKET SIGNALS
+# TAB 1 – MARKET DEMAND
 # =====================================================
 
 with tab1:
 
-    st.subheader("Interest Over Time – India")
+    st.subheader("Search Demand Trend – India")
 
     if not trend_data.empty:
-        fig1 = px.line(trend_data, y=selected_title)
-        st.plotly_chart(fig1, use_container_width=True)
+        fig = px.line(trend_data, y=selected_title)
+        st.plotly_chart(fig, use_container_width=True)
 
-        st.subheader("Geographic Demand Heatmap – India")
-
-    if not region_data.empty:
-
-        region_df = region_data.reset_index()
-        region_df.columns = ["State", "Interest"]
-        region_df = region_df[region_df["Interest"] > 0]
-        region_df["State"] = region_df["State"].str.strip()
-
-        # Handle state code case
-        if region_df["State"].str.len().max() <= 3:
-
-            state_code_map = {
-                "MH": "Maharashtra",
-                "KA": "Karnataka",
-                "TN": "Tamil Nadu",
-                "DL": "Delhi",
-                "UP": "Uttar Pradesh",
-                "WB": "West Bengal",
-                "RJ": "Rajasthan",
-                "GJ": "Gujarat",
-                "HR": "Haryana",
-                "PB": "Punjab",
-                "MP": "Madhya Pradesh",
-                "AP": "Andhra Pradesh",
-                "TS": "Telangana",
-                "KL": "Kerala",
-                "BR": "Bihar",
-                "OR": "Odisha",
-                "AS": "Assam"
-            }
-
-            region_df["State"] = region_df["State"].replace(state_code_map)
-
-        # Sort by interest
-        region_df = region_df.sort_values("Interest", ascending=False)
-
-        # Create Heatmap
-        heatmap_fig = px.imshow(
-            region_df[["Interest"]],
-            labels=dict(color="Search Interest"),
-            x=["Interest Score"],
-            y=region_df["State"],
-            color_continuous_scale="Reds",
-            aspect="auto"
-        )
-
-        heatmap_fig.update_layout(
-            height=600,
-            xaxis_title="",
-            yaxis_title="State"
-        )
-
-        st.plotly_chart(heatmap_fig, use_container_width=True)
-
-        # Add executive insight
-        st.markdown("### Top 5 High-Demand States")
-        st.dataframe(region_df.head(5))
+        latest_value = trend_data[selected_title].iloc[-1]
+        st.metric("Current Demand Index", int(latest_value))
 
     else:
-        st.warning("Google Trends returned no regional data.")
+        st.warning("No trend data available.")
 
 
 # =====================================================
-# TAB 2 – AUDIENCE INTELLIGENCE
+# TAB 2 – AUDIENCE PERCEPTION
 # =====================================================
 
 with tab2:
@@ -184,285 +103,147 @@ with tab2:
     net_sentiment = df[compound_col].mean()
 
     col1, col2, col3 = st.columns(3)
-    col1.metric("Positive Ratio", f"{round(positive_ratio*100,2)}%")
-    col2.metric("Negative Risk", f"{round(negative_ratio*100,2)}%")
+    col1.metric("Positive Sentiment %", f"{round(positive_ratio*100,2)}%")
+    col2.metric("Negative Sentiment %", f"{round(negative_ratio*100,2)}%")
     col3.metric("Net Sentiment Score", round(net_sentiment,3))
 
-    emotion_cols = ["joy","trust","anticipation","sadness"]
-    available_emotions = [col for col in emotion_cols if col in df.columns]
+    emotion_cols = [c for c in ["joy","anticipation","trust","sadness"] if c in df.columns]
 
-    if len(available_emotions) > 0:
-        emotion_means = df[available_emotions].mean()
-        fig3 = go.Figure(data=go.Bar(
-            x=emotion_means.index,
-            y=emotion_means.values
-        ))
-        fig3.update_layout(title="Emotional Drivers")
-        st.plotly_chart(fig3, use_container_width=True)
+    if emotion_cols:
+        emotion_mean = df[emotion_cols].mean()
+        fig = go.Figure(data=go.Bar(x=emotion_mean.index, y=emotion_mean.values))
+        fig.update_layout(title="Dominant Emotional Drivers")
+        st.plotly_chart(fig, use_container_width=True)
+
 
 # =====================================================
-# TAB 3 – INVESTMENT RADAR
+# TAB 3 – RISK ANALYSIS
 # =====================================================
 
 with tab3:
 
-    positive_ratio = (df[sentiment_col].str.lower() == "positive").mean()
-    negative_ratio = (df[sentiment_col].str.lower() == "negative").mean()
+    sentiment_std = df[compound_col].std()
+    polarization_index = round(sentiment_std, 3)
 
-    ssi = (df[compound_col].mean() + 1) / 2
+    col1, col2 = st.columns(2)
+    col1.metric("Sentiment Volatility", polarization_index)
+    col2.metric("Risk Adjusted Score", round(positive_ratio - negative_ratio,3))
 
-    if "joy" in df.columns and "anticipation" in df.columns:
-        eei = (df["joy"].mean() + df["anticipation"].mean()) / 2
-    else:
-        eei = ssi
+    st.markdown("""
+    Higher volatility indicates polarization risk.  
+    Risk Adjusted Score reflects net positivity strength.
+    """)
 
-    if "date" in df.columns:
-        velocity = df.groupby("date").size().pct_change().mean()
-        velocity = 0 if pd.isna(velocity) else velocity
-    else:
-        velocity = 0
-
-    categories = ['Sentiment Strength','Excitement','Momentum','Low Risk']
-    values = [
-        ssi,
-        eei,
-        velocity,
-        1-negative_ratio
-    ]
-
-    fig4 = go.Figure()
-    fig4.add_trace(go.Scatterpolar(
-        r=values,
-        theta=categories,
-        fill='toself'
-    ))
-
-    fig4.update_layout(
-        polar=dict(radialaxis=dict(visible=True, range=[0,1])),
-        showlegend=False
-    )
-
-    st.plotly_chart(fig4, use_container_width=True)
 
 # =====================================================
-# TAB 4 – VELOCITY
+# TAB 4 – ACQUISITION ENGINE
 # =====================================================
 
 with tab4:
 
-    if "date" in df.columns:
-        volume_trend = df.groupby("date").size().reset_index(name="Volume")
-        fig5 = px.line(volume_trend, x="date", y="Volume")
-        st.plotly_chart(fig5, use_container_width=True)
+    st.subheader("Composite Acquisition Evaluation")
+
+    # Normalize components
+    demand_score = (trend_data[selected_title].iloc[-1] / 100) if not trend_data.empty else 0
+    sentiment_score = positive_ratio
+    momentum_score = df.groupby("date").size().pct_change().mean() if "date" in df.columns else 0
+    momentum_score = 0 if pd.isna(momentum_score) else min(max(momentum_score,0),1)
+    risk_score = 1 - negative_ratio
+
+    acquisition_score = (
+        0.3 * demand_score +
+        0.3 * sentiment_score +
+        0.2 * momentum_score +
+        0.2 * risk_score
+    )
+
+    st.metric("Acquisition Readiness Score", round(acquisition_score,2))
+
+    if acquisition_score > 0.7:
+        st.success("Recommendation: Strong Acquisition Candidate")
+    elif acquisition_score > 0.5:
+        st.warning("Recommendation: Moderate Potential")
     else:
-        st.info("No timestamp column available for velocity analysis.")
+        st.error("Recommendation: Caution – Evaluate Further")
 
-# ======================================================
-# TAB 5 – LIVE SENTIMENT PREDICTION ENGINE
-# ======================================================
+    radar_fig = go.Figure()
+    radar_fig.add_trace(go.Scatterpolar(
+        r=[demand_score, sentiment_score, momentum_score, risk_score],
+        theta=['Demand','Sentiment','Momentum','Low Risk'],
+        fill='toself'
+    ))
+    radar_fig.update_layout(polar=dict(radialaxis=dict(range=[0,1])))
+    st.plotly_chart(radar_fig, use_container_width=True)
 
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.svm import LinearSVC
-from sklearn.preprocessing import LabelEncoder
+
+# =====================================================
+# TAB 5 – TOOLS & MODEL VALIDATION
+# =====================================================
 
 with tab5:
 
-    st.subheader("AI Sentiment Classification Engine")
-    st.markdown("Test real-time sentiment prediction using trained model.")
+    st.subheader("Content Perception Simulation Tool")
 
-    # ============================
-    # Detect required columns
-    # ============================
+    if text_col:
+        @st.cache_resource
+        def train_model():
+            vectorizer = TfidfVectorizer(max_features=3000, stop_words="english")
+            X = vectorizer.fit_transform(df[text_col])
+            le = LabelEncoder()
+            y = le.fit_transform(df[sentiment_col])
+            model = LinearSVC()
+            model.fit(X, y)
+            return vectorizer, model, le
 
-    text_col = None
-    for col in df.columns:
-        if "text" in col.lower():
-            text_col = col
-            break
+        vectorizer, model, le = train_model()
 
-    sentiment_col = None
-    for col in df.columns:
-        if "sentiment" in col.lower():
-            sentiment_col = col
-            break
+        user_input = st.text_area("Simulate Audience Reaction (Enter tagline / dialogue / trailer caption)")
 
-    if text_col is None or sentiment_col is None:
-        st.error("Required text or sentiment column not found in dataset.")
-        st.stop()
+        if st.button("Simulate Sentiment Response"):
 
-    # ============================
-    # Train Model Once (Cached)
-    # ============================
+            if user_input.strip():
+                vec = vectorizer.transform([user_input])
+                pred = model.predict(vec)
+                label = le.inverse_transform(pred)[0]
 
-    @st.cache_resource
-    def train_model(data):
-        vectorizer = TfidfVectorizer(max_features=3000, stop_words="english")
-        X = vectorizer.fit_transform(data[text_col])
+                st.success(f"Predicted Public Sentiment: {label.upper()}")
 
+            else:
+                st.warning("Enter text to simulate audience perception.")
+
+    st.divider()
+    st.subheader("Model Reliability Overview")
+
+    if text_col:
+        X = TfidfVectorizer(max_features=3000, stop_words="english").fit_transform(df[text_col])
         le = LabelEncoder()
-        y = le.fit_transform(data[sentiment_col])
+        y = le.fit_transform(df[sentiment_col])
+
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
         model = LinearSVC()
-        model.fit(X, y)
+        model.fit(X_train, y_train)
+        y_pred = model.predict(X_test)
 
-        return vectorizer, model, le
+        accuracy = (y_pred == y_test).mean()
+        st.metric("Model Accuracy", round(float(accuracy),3))
 
-    vectorizer, model, le = train_model(df)
+        cm = confusion_matrix(y_test, y_pred)
 
-    # ============================
-    # User Input
-    # ============================
+        fig = go.Figure(data=go.Heatmap(
+            z=cm,
+            x=le.classes_,
+            y=le.classes_,
+            colorscale="Blues"
+        ))
+        fig.update_layout(
+            xaxis_title="Predicted",
+            yaxis_title="Actual",
+            title="Confusion Matrix"
+        )
+        st.plotly_chart(fig, use_container_width=True)
 
-    user_input = st.text_area("Enter viewer comment to classify:")
-
-    if st.button("Predict Sentiment"):
-
-        if user_input.strip() == "":
-            st.warning("Please enter some text.")
-        else:
-            input_vector = vectorizer.transform([user_input])
-            prediction = model.predict(input_vector)
-            predicted_label = le.inverse_transform(prediction)[0]
-
-            st.success(f"Predicted Sentiment: {predicted_label.upper()}")
-
-            # Confidence Score (Distance from hyperplane)
-            decision_scores = model.decision_function(input_vector)
-
-            if len(le.classes_) == 2:
-                confidence = abs(decision_scores[0]) / np.max(abs(decision_scores))
-            else:
-                confidence = np.max(decision_scores) / np.sum(abs(decision_scores))
-
-            st.metric("Prediction Confidence Score", round(float(confidence), 3))
-
-            # Display probability-style indicator
-            st.progress(float(min(max(confidence, 0), 1)))
-
-# ======================================================
-# TAB 6 – MODEL INTELLIGENCE (SVM ENGINE DIAGNOSTICS)
-# ======================================================
-
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.svm import LinearSVC
-from sklearn.preprocessing import LabelEncoder
-from sklearn.model_selection import train_test_split
-from sklearn.metrics import classification_report, confusion_matrix
-import seaborn as sns
-import matplotlib.pyplot as plt
-
-with tab6:
-
-    st.subheader("SVM Sentiment Model Diagnostics")
-
-    # ==============================
-    # Detect required columns safely
-    # ==============================
-
-    text_col = None
-    for col in df.columns:
-        if "text" in col.lower():
-            text_col = col
-            break
-
-    sentiment_col = None
-    for col in df.columns:
-        if "sentiment" in col.lower():
-            sentiment_col = col
-            break
-
-    if text_col is None or sentiment_col is None:
-        st.error("Required text or sentiment column not found.")
-        st.stop()
-
-    # ==============================
-    # Train-Test Split
-    # ==============================
-
-    X_text = df[text_col]
-    y_labels = df[sentiment_col]
-
-    vectorizer = TfidfVectorizer(max_features=3000, stop_words="english")
-    X = vectorizer.fit_transform(X_text)
-
-    le = LabelEncoder()
-    y = le.fit_transform(y_labels)
-
-    X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=0.2, random_state=42
-    )
-
-    model = LinearSVC()
-    model.fit(X_train, y_train)
-
-    y_pred = model.predict(X_test)
-
-    # ==============================
-    # Accuracy
-    # ==============================
-
-    accuracy = (y_pred == y_test).mean()
-    st.metric("Model Accuracy", round(float(accuracy), 3))
-
-    # ==============================
-    # Classification Report
-    # ==============================
-
-    report = classification_report(
-        y_test,
-        y_pred,
-        target_names=le.classes_,
-        output_dict=True
-    )
-
-    report_df = pd.DataFrame(report).transpose()
-    st.subheader("Classification Performance")
-    st.dataframe(report_df)
-
-    # ==============================
-    # Confusion Matrix
-    # ==============================
-
-    cm = confusion_matrix(y_test, y_pred)
-
-    fig, ax = plt.subplots()
-    sns.heatmap(cm,
-                annot=True,
-                fmt="d",
-                cmap="Blues",
-                xticklabels=le.classes_,
-                yticklabels=le.classes_)
-    ax.set_xlabel("Predicted")
-    ax.set_ylabel("Actual")
-
-    st.subheader("Confusion Matrix")
-    st.pyplot(fig)
-
-    # ==============================
-    # Model-Based Sentiment Distribution
-    # ==============================
-
-    full_predictions = model.predict(X)
-    predicted_labels = le.inverse_transform(full_predictions)
-
-    pred_df = pd.Series(predicted_labels).value_counts().reset_index()
-    pred_df.columns = ["Sentiment", "Count"]
-
-    fig2 = px.bar(
-        pred_df,
-        x="Sentiment",
-        y="Count",
-        color="Sentiment",
-        title="SVM-Based Sentiment Distribution"
-    )
-
-    st.plotly_chart(fig2, use_container_width=True)
-
-    st.markdown("""
-    This module demonstrates how sentiment predictions are generated 
-    and evaluated before being incorporated into acquisition analytics.
-    """)
-
-
-
-
+        st.markdown("""
+        The sentiment classifier underpins audience perception metrics used across the system.  
+        Model validation ensures signal reliability before acquisition scoring.
+        """)
