@@ -89,12 +89,12 @@ region_data = get_region_interest(selected_title)
 # =====================================================
 
 tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
-    "Market Signals",
-    "Audience Intelligence",
-    "Investment Radar",
-    "Benchmark & Velocity",
+    "Market Demand",
+    "Audience Perception",
+    "Risk Analysis",
+    "Acquisition Engine",
     "Sentiment Prediction",
-    "Model Intelligence"
+    "Signal Reliability"
 ])
 
 
@@ -462,6 +462,7 @@ with tab6:
     This module demonstrates how sentiment predictions are generated 
     and evaluated before being incorporated into acquisition analytics.
     """)
+
 
 
 
