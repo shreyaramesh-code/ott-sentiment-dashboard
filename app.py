@@ -88,12 +88,13 @@ region_data = get_region_interest(selected_title)
 # TABS
 # =====================================================
 
-tab1, tab2, tab3, tab4, tab5 = st.tabs([
+tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
     "Market Signals",
     "Audience Intelligence",
     "Investment Radar",
     "Benchmark & Velocity",
-    "Sentiment Prediction"
+    "Sentiment Prediction",
+    "Model Intelligence"
 ])
 
 
@@ -337,4 +338,130 @@ with tab5:
 
             # Display probability-style indicator
             st.progress(float(min(max(confidence, 0), 1)))
+
+# ======================================================
+# TAB 6 – MODEL INTELLIGENCE (SVM ENGINE DIAGNOSTICS)
+# ======================================================
+
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.svm import LinearSVC
+from sklearn.preprocessing import LabelEncoder
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import classification_report, confusion_matrix
+import seaborn as sns
+import matplotlib.pyplot as plt
+
+with tab6:
+
+    st.subheader("SVM Sentiment Model Diagnostics")
+
+    # ==============================
+    # Detect required columns safely
+    # ==============================
+
+    text_col = None
+    for col in df.columns:
+        if "text" in col.lower():
+            text_col = col
+            break
+
+    sentiment_col = None
+    for col in df.columns:
+        if "sentiment" in col.lower():
+            sentiment_col = col
+            break
+
+    if text_col is None or sentiment_col is None:
+        st.error("Required text or sentiment column not found.")
+        st.stop()
+
+    # ==============================
+    # Train-Test Split
+    # ==============================
+
+    X_text = df[text_col]
+    y_labels = df[sentiment_col]
+
+    vectorizer = TfidfVectorizer(max_features=3000, stop_words="english")
+    X = vectorizer.fit_transform(X_text)
+
+    le = LabelEncoder()
+    y = le.fit_transform(y_labels)
+
+    X_train, X_test, y_train, y_test = train_test_split(
+        X, y, test_size=0.2, random_state=42
+    )
+
+    model = LinearSVC()
+    model.fit(X_train, y_train)
+
+    y_pred = model.predict(X_test)
+
+    # ==============================
+    # Accuracy
+    # ==============================
+
+    accuracy = (y_pred == y_test).mean()
+    st.metric("Model Accuracy", round(float(accuracy), 3))
+
+    # ==============================
+    # Classification Report
+    # ==============================
+
+    report = classification_report(
+        y_test,
+        y_pred,
+        target_names=le.classes_,
+        output_dict=True
+    )
+
+    report_df = pd.DataFrame(report).transpose()
+    st.subheader("Classification Performance")
+    st.dataframe(report_df)
+
+    # ==============================
+    # Confusion Matrix
+    # ==============================
+
+    cm = confusion_matrix(y_test, y_pred)
+
+    fig, ax = plt.subplots()
+    sns.heatmap(cm,
+                annot=True,
+                fmt="d",
+                cmap="Blues",
+                xticklabels=le.classes_,
+                yticklabels=le.classes_)
+    ax.set_xlabel("Predicted")
+    ax.set_ylabel("Actual")
+
+    st.subheader("Confusion Matrix")
+    st.pyplot(fig)
+
+    # ==============================
+    # Model-Based Sentiment Distribution
+    # ==============================
+
+    full_predictions = model.predict(X)
+    predicted_labels = le.inverse_transform(full_predictions)
+
+    pred_df = pd.Series(predicted_labels).value_counts().reset_index()
+    pred_df.columns = ["Sentiment", "Count"]
+
+    fig2 = px.bar(
+        pred_df,
+        x="Sentiment",
+        y="Count",
+        color="Sentiment",
+        title="SVM-Based Sentiment Distribution"
+    )
+
+    st.plotly_chart(fig2, use_container_width=True)
+
+    st.markdown("""
+    This module demonstrates how sentiment predictions are generated 
+    and evaluated before being incorporated into acquisition analytics.
+    """)
+
+
 
