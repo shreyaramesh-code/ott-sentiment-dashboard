@@ -11,7 +11,7 @@ from sklearn.model_selection import train_test_split
 from sklearn.metrics import confusion_matrix
 
 st.set_page_config(layout="wide")
-st.title("Pre-Release OTT Acquisition Intelligence System")
+st.title("OTT Content Marketing Analytics Dashboard")
 st.markdown("Decision Analytics Framework for Korean Content – Indian Market")
 
 # =====================================================
@@ -90,7 +90,7 @@ tab1, tab2, tab3, tab4, tab5 = st.tabs([
     "Market Demand",
     "Audience Perception",
     "Risk Analysis",
-    "Acquisition Engine",
+    "Content Momentum Engine",
     "Tools & Model Validation"
 ])
 
@@ -182,12 +182,12 @@ with tab3:
     col2.metric("Risk Adjusted Sentiment", round(risk_adjusted_score,3))
 
 # =====================================================
-# TAB 4 – ACQUISITION ENGINE
+# TAB 4 – Content Momentum ENGINE
 # =====================================================
 
 with tab4:
 
-    st.subheader("Composite Acquisition Evaluation")
+    st.subheader("Content Momentum Evaluation")
 
     demand_score = (trend_data[selected_title].iloc[-1] / 100) if not trend_data.empty else 0
     sentiment_score = positive_ratio
@@ -195,18 +195,18 @@ with tab4:
     momentum_score = 0 if pd.isna(momentum_score) else min(max(momentum_score,0),1)
     risk_score = 1 - negative_ratio
 
-    acquisition_score = (
+    content_momentum_index = (
         0.3 * demand_score +
         0.3 * sentiment_score +
         0.2 * momentum_score +
         0.2 * risk_score
     )
 
-    st.metric("Acquisition Readiness Score", round(acquisition_score,2))
+    st.metric("Content_Momentum_Index", round(content_momentum_index,2))
 
-    if acquisition_score > 0.7:
-        st.success("Recommendation: Strong Acquisition Candidate")
-    elif acquisition_score > 0.5:
+    if content_momentum_index > 0.7:
+        st.success("Recommendation: Strong content Candidate")
+    elif content_momentum_index > 0.5:
         st.warning("Recommendation: Moderate Potential")
     else:
         st.error("Recommendation: Caution – Evaluate Further")
@@ -291,3 +291,4 @@ with tab5:
         )
 
         st.plotly_chart(fig, use_container_width=True)
+
