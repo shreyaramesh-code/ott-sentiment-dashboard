@@ -178,7 +178,7 @@ with tab3:
     risk_adjusted_score = positive_ratio - negative_ratio
 
     col1, col2 = st.columns(2)
-    col1.metric("Polarization Index", round(sentiment_std,3))
+    #col1.metric("Polarization Index", round(sentiment_std,3))
     col2.metric("Risk Adjusted Sentiment", round(risk_adjusted_score,3))
 
 # =====================================================
@@ -291,4 +291,5 @@ with tab5:
         )
 
         st.plotly_chart(fig, use_container_width=True)
+
 
