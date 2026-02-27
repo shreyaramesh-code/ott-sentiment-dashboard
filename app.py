@@ -128,8 +128,8 @@ with tab1:
     fig = px.line(trend_data, y="Interest")
     st.plotly_chart(fig, use_container_width=True)
 
-    st.metric("Current Demand Index",
-              int(trend_data["Interest"].iloc[-1]))
+    #st.metric("Current Demand Index",
+    #          int(trend_data["Interest"].iloc[-1]))
 
     st.subheader("State-wise Demand Intensity")
 
@@ -289,4 +289,5 @@ with tab5:
         )
 
         st.plotly_chart(fig, use_container_width=True)
+
 
