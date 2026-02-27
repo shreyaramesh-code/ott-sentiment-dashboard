@@ -14,7 +14,7 @@ st.title("OTT Content Marketing Analytics Dashboard")
 st.markdown("Decision Analytics Framework for Korean Content – Indian Market")
 
 # =====================================================
-# LOAD DATA
+# LOAD YOUTUBE DATA
 # =====================================================
 
 @st.cache_data
@@ -63,7 +63,7 @@ else:
     filtered_df = df.copy()
 
 # =====================================================
-# LOAD DOWNLOADED GOOGLE TRENDS FILES
+# LOAD GOOGLE TRENDS CSV FILES (ROBUST VERSION)
 # =====================================================
 
 @st.cache_data
@@ -73,26 +73,31 @@ def load_trend_data(title):
         trend = pd.read_csv("trend_squid_game.csv", skiprows=1)
         region = pd.read_csv("region_squid_game.csv", skiprows=1)
 
-        trend.columns = ["Date", "Interest"]
-        region.columns = ["State", "Interest"]
-
     elif title == "Squid Game 2":
         trend = pd.read_csv("trend_squid_game2.csv", skiprows=1)
         region = pd.read_csv("region_squid_game2.csv", skiprows=1)
-
-        trend.columns = ["Date", "Interest"]
-        region.columns = ["State", "Interest"]
 
     else:
         trend = pd.read_csv("trend_can_this_love_be_translated.csv", skiprows=1)
         region = pd.read_csv("region_can_this_love_be_translated.csv", skiprows=1)
 
-        trend.columns = ["Date", "Interest"]
-        region.columns = ["State", "Interest"]
-
-    trend["Date"] = pd.to_datetime(trend["Date"])
+    # -----------------------
+    # CLEAN TREND DATA
+    # -----------------------
+    trend.columns = trend.columns.str.strip()
+    trend = trend.iloc[:, :2]  # take only first 2 columns
+    trend.columns = ["Date", "Interest"]
+    trend["Date"] = pd.to_datetime(trend["Date"], errors="coerce")
+    trend = trend.dropna()
     trend.set_index("Date", inplace=True)
 
+    # -----------------------
+    # CLEAN REGION DATA
+    # -----------------------
+    region.columns = region.columns.str.strip()
+    region = region.iloc[:, :2]  # take only first 2 columns
+    region.columns = ["State", "Interest"]
+    region = region.dropna()
     region = region.sort_values("Interest", ascending=False)
 
     return trend, region
@@ -185,7 +190,7 @@ with tab3:
     st.metric("Risk Adjusted Sentiment", round(risk_adjusted_score,3))
 
 # =====================================================
-# TAB 4 – Content Momentum Engine
+# TAB 4 – CONTENT MOMENTUM ENGINE
 # =====================================================
 
 with tab4:
