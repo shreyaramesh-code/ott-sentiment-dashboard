@@ -69,15 +69,44 @@ else:
 
 pytrends = TrendReq(hl='en-IN', tz=330)
 
-@st.cache_data(ttl=3600)
-def get_trends(keyword):
-    pytrends.build_payload([keyword], timeframe='today 3-m', geo='IN')
-    return pytrends.interest_over_time()
+# Fixed timeframe until Jan 2026
+TIMEFRAME = '2024-01-01 2026-01-31'
 
-@st.cache_data(ttl=3600)
+
+@st.cache_data(show_spinner=False)
+def get_trends(keyword):
+
+    try:
+        pytrends.build_payload(
+            [keyword],
+            timeframe=TIMEFRAME,
+            geo='IN'
+        )
+        data = pytrends.interest_over_time()
+        return data
+
+    except:
+        return pd.DataFrame()
+
+
+@st.cache_data(show_spinner=False)
 def get_region_interest(keyword):
-    pytrends.build_payload([keyword], timeframe='today 3-m', geo='IN')
-    return pytrends.interest_by_region(resolution='REGION', inc_low_vol=True)
+
+    try:
+        pytrends.build_payload(
+            [keyword],
+            timeframe=TIMEFRAME,
+            geo='IN'
+        )
+        data = pytrends.interest_by_region(
+            resolution='REGION',
+            inc_low_vol=True
+        )
+        return data
+
+    except:
+        return pd.DataFrame()
+
 
 trend_data = get_trends(selected_title)
 region_data = get_region_interest(selected_title)
@@ -291,5 +320,6 @@ with tab5:
         )
 
         st.plotly_chart(fig, use_container_width=True)
+
 
 
