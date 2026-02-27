@@ -89,8 +89,8 @@ def load_trend_data(title):
     trend.columns = ["Date", "Interest"]
     trend["Date"] = pd.to_datetime(trend["Date"], errors="coerce")
     trend = trend.dropna()
+    trend = trend.sort_values("Date")   
     trend.set_index("Date", inplace=True)
-
     # -----------------------
     # CLEAN REGION DATA
     # -----------------------
@@ -289,3 +289,4 @@ with tab5:
         )
 
         st.plotly_chart(fig, use_container_width=True)
+
