@@ -63,58 +63,42 @@ else:
     filtered_df = df.copy()
 
 # =====================================================
-# STATIC HISTORICAL MARKET DATA (DEMO SAFE)
+# LOAD DOWNLOADED GOOGLE TRENDS FILES
 # =====================================================
 
-# Historical trend simulation (Jan 2024 - Jan 2026)
-dates = pd.date_range(start="2024-01-01", end="2026-01-01", freq="M")
+@st.cache_data
+def load_trend_data(title):
 
-base = {
-    "Squid Game": np.linspace(55, 90, len(dates)),
-    "Squid Game 2": np.linspace(40, 85, len(dates)),
-    "Can This Love Be Translated": np.linspace(30, 70, len(dates))
-}
+    if title == "Squid Game":
+        trend = pd.read_csv("trend_squid_game.csv", skiprows=1)
+        region = pd.read_csv("region_squid_game.csv", skiprows=1)
 
-trend_data = pd.DataFrame({
-    selected_title: base[selected_title]
-}, index=dates)
+        trend.columns = ["Date", "Interest"]
+        region.columns = ["State", "Interest"]
 
-# Simulated state demand data
-region_templates = {
-    "Squid Game": {
-        "Maharashtra": 100,
-        "Karnataka": 88,
-        "Delhi": 81,
-        "Tamil Nadu": 76,
-        "Uttar Pradesh": 70,
-        "West Bengal": 63,
-        "Gujarat": 60,
-        "Kerala": 58
-    },
-    "Squid Game 2": {
-        "Maharashtra": 92,
-        "Karnataka": 86,
-        "Delhi": 79,
-        "Tamil Nadu": 74,
-        "Uttar Pradesh": 68,
-        "West Bengal": 62,
-        "Gujarat": 59,
-        "Telangana": 55
-    },
-    "Can This Love Be Translated": {
-        "Tamil Nadu": 85,
-        "Kerala": 80,
-        "Karnataka": 76,
-        "Delhi": 72,
-        "Maharashtra": 68,
-        "West Bengal": 60,
-        "Telangana": 58,
-        "Gujarat": 50
-    }
-}
+    elif title == "Squid Game 2":
+        trend = pd.read_csv("trend_squid_game2.csv", skiprows=1)
+        region = pd.read_csv("region_squid_game2.csv", skiprows=1)
 
-region_data = pd.DataFrame(region_templates[selected_title].items(), columns=["State", "Interest"])
-region_data = region_data.sort_values("Interest", ascending=False)
+        trend.columns = ["Date", "Interest"]
+        region.columns = ["State", "Interest"]
+
+    else:
+        trend = pd.read_csv("trend_can_this_love_be_translated.csv", skiprows=1)
+        region = pd.read_csv("region_can_this_love_be_translated.csv", skiprows=1)
+
+        trend.columns = ["Date", "Interest"]
+        region.columns = ["State", "Interest"]
+
+    trend["Date"] = pd.to_datetime(trend["Date"])
+    trend.set_index("Date", inplace=True)
+
+    region = region.sort_values("Interest", ascending=False)
+
+    return trend, region
+
+
+trend_data, region_data = load_trend_data(selected_title)
 
 # =====================================================
 # TABS
@@ -135,11 +119,12 @@ tab1, tab2, tab3, tab4, tab5 = st.tabs([
 with tab1:
 
     st.subheader("Search Demand Trend – India")
-    fig = px.line(trend_data, y=selected_title)
+
+    fig = px.line(trend_data, y="Interest")
     st.plotly_chart(fig, use_container_width=True)
 
     st.metric("Current Demand Index",
-              int(trend_data[selected_title].iloc[-1]))
+              int(trend_data["Interest"].iloc[-1]))
 
     st.subheader("State-wise Demand Intensity")
 
@@ -152,7 +137,7 @@ with tab1:
         aspect="auto"
     )
 
-    heatmap_fig.update_layout(height=500)
+    heatmap_fig.update_layout(height=600)
     st.plotly_chart(heatmap_fig, use_container_width=True)
 
     st.markdown("Top 5 High-Demand States")
@@ -205,7 +190,7 @@ with tab3:
 
 with tab4:
 
-    demand_score = trend_data[selected_title].iloc[-1] / 100
+    demand_score = trend_data["Interest"].iloc[-1] / 100
     sentiment_score = positive_ratio
     momentum_score = filtered_df.groupby("date").size().pct_change().mean() if "date" in filtered_df.columns else 0
     momentum_score = 0 if pd.isna(momentum_score) else min(max(momentum_score,0),1)
